@@ -43,8 +43,13 @@ func TestNew_FieldsPopulated(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Timestamp %q is not valid RFC3339: %v", got.Error.Timestamp, err)
 		}
-		if ts.Before(before) || ts.After(after) {
-			t.Errorf("Timestamp %v is outside [%v, %v]", ts, before, after)
+		// RFC3339 has second precision only. Truncate the window bounds to the
+		// same granularity before comparing so sub-second differences do not
+		// cause a false failure.
+		beforeSec := before.Truncate(time.Second)
+		afterSec := after.Truncate(time.Second).Add(time.Second) // inclusive upper bound
+		if ts.Before(beforeSec) || ts.After(afterSec) {
+			t.Errorf("Timestamp %v is outside [%v, %v]", ts, beforeSec, afterSec)
 		}
 	})
 }
