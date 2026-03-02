@@ -208,6 +208,30 @@ digital-worker/
 
 **All E2E tests remain green — 24/24 passed after Sprint 5 changes.**
 
+### Sprint 6 — OAuth M2M and Google Social Login
+
+**Deliverables completed**
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| US-12 | Client Credentials Grant (M2M) — `POST /oauth/token` with `grant_type=client_credentials`; scope-bound JWT, no refresh token (RFC 6749 §4.4.3) | ✅ |
+| US-13 | Google Social Login (OIDC) — `POST /auth/oauth/google` returns auth URL; `GET /auth/oauth/google/callback` exchanges code for tokens | ✅ |
+
+**Notes**
+- US-12: `client_id` + `client_secret` (SHA-256 verified); `client_credentials` must be in client's `grant_types`; JWT `sub = client_id`; no user context; audit `OAUTH_TOKEN_ISSUED` with `grant_type: client_credentials`
+- US-13: full OIDC flow via standard `net/http` — no external OAuth library added; state token stored in Redis (one-time-use, 10 min TTL); ID token verified via Google tokeninfo endpoint
+- US-13 account linking (ADR-006): if Google email matches existing password user → password verification required before link; if no password (social-only) → auto-link; new users auto-verified
+- API-only per ADR-003: Initiate returns `{"auth_url": "..."}` (client handles redirect); Callback returns `{"access_token", "refresh_token", "token_type", "expires_in", "is_new_user"}`
+- New audit events wired: `GOOGLE_LOGIN`, `GOOGLE_ACCOUNT_LINKED`
+- Per-tenant Google credentials supported via `TenantConfig.GoogleClientID/Secret`; falls back to global `OAUTH_GOOGLE_CLIENT_ID/SECRET`
+
+**New files added**
+- `internal/domain/social_account.go` — `SocialAccount` struct + `SocialAccountRepository` interface
+- `internal/repository/postgres/social_account_repo.go` — queries existing `oauth_social_accounts` table (migration 000009)
+- `internal/service/google_service.go` — `GoogleService` interface + full OIDC implementation
+
+**All unit tests remain green — 67/67 passed after Sprint 6 changes.**
+
 ### Overall: 91 tests · 0 failures
 
 ---
