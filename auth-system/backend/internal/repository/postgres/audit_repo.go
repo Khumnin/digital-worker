@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -57,7 +58,34 @@ func (r *PostgresAuditRepo) List(ctx context.Context, filter domain.AuditFilter)
 	var total int
 
 	err = pgdb.WithTenantSchema(ctx, r.pool, schema, func(conn *pgx.Conn) error {
-		if countErr := conn.QueryRow(ctx, "SELECT COUNT(*) FROM audit_log").Scan(&total); countErr != nil {
+		args := []interface{}{}
+		conds := []string{"archived = false"}
+
+		if filter.EventType != nil && *filter.EventType != "" {
+			args = append(args, *filter.EventType)
+			conds = append(conds, fmt.Sprintf("event_type = $%d", len(args)))
+		}
+		if filter.ActorID != nil {
+			args = append(args, *filter.ActorID)
+			conds = append(conds, fmt.Sprintf("actor_id = $%d", len(args)))
+		}
+		if filter.TargetUserID != nil {
+			args = append(args, *filter.TargetUserID)
+			conds = append(conds, fmt.Sprintf("target_user_id = $%d", len(args)))
+		}
+		if filter.From != nil {
+			args = append(args, *filter.From)
+			conds = append(conds, fmt.Sprintf("occurred_at >= $%d", len(args)))
+		}
+		if filter.To != nil {
+			args = append(args, *filter.To)
+			conds = append(conds, fmt.Sprintf("occurred_at <= $%d", len(args)))
+		}
+
+		where := "WHERE " + strings.Join(conds, " AND ")
+
+		countSQL := fmt.Sprintf("SELECT COUNT(*) FROM audit_log %s", where)
+		if countErr := conn.QueryRow(ctx, countSQL, args...).Scan(&total); countErr != nil {
 			return fmt.Errorf("count audit log: %w", countErr)
 		}
 
@@ -66,13 +94,17 @@ func (r *PostgresAuditRepo) List(ctx context.Context, filter domain.AuditFilter)
 			limit = 50
 		}
 
-		rows, queryErr := conn.Query(ctx, `
+		args = append(args, limit, filter.Offset)
+		dataSQL := fmt.Sprintf(`
 			SELECT id, event_type, actor_id, actor_ip, actor_ua,
 			       target_user_id, metadata, occurred_at, archived
 			FROM audit_log
+			%s
 			ORDER BY occurred_at DESC
-			LIMIT $1 OFFSET $2
-		`, limit, filter.Offset)
+			LIMIT $%d OFFSET $%d
+		`, where, len(args)-1, len(args))
+
+		rows, queryErr := conn.Query(ctx, dataSQL, args...)
 		if queryErr != nil {
 			return fmt.Errorf("query audit log: %w", queryErr)
 		}

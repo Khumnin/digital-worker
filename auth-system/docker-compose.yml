@@ -77,7 +77,7 @@ services:
     ports:
       - "8200:8200"
     healthcheck:
-      test: ["CMD", "vault", "status"]
+      test: ["CMD", "sh", "-c", "VAULT_ADDR=http://127.0.0.1:8200 vault status"]
       interval: 10s
       timeout: 5s
       retries: 5

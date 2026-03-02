@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"tigersoft/auth-system/pkg/apierror"
 	"tigersoft/auth-system/internal/domain"
 	pgdb "tigersoft/auth-system/internal/infrastructure/postgres"
+	"tigersoft/auth-system/pkg/apierror"
 )
 
 // TenantCache resolves tenant ID/slug to PostgreSQL schema name.
@@ -121,6 +121,11 @@ func RequireTenant(cache TenantCache) gin.HandlerFunc {
 
 		c.Set(string(pgdb.CtxKeySchemaName), schemaName)
 		c.Set(string(pgdb.CtxKeyTenantID), tenantID)
+
+		// Propagate into the standard context.Context so services can read via ctx.Value.
+		ctx := context.WithValue(c.Request.Context(), pgdb.CtxKeySchemaName, schemaName)
+		ctx = context.WithValue(ctx, pgdb.CtxKeyTenantID, tenantID)
+		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
 	}

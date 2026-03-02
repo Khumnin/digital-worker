@@ -2,12 +2,13 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"tigersoft/auth-system/pkg/apierror"
 	pgdb "tigersoft/auth-system/internal/infrastructure/postgres"
+	"tigersoft/auth-system/pkg/apierror"
 	"tigersoft/auth-system/pkg/jwtutil"
 )
 
@@ -61,6 +62,11 @@ func RequireAuth(jwtVerifier jwtutil.Verifier) gin.HandlerFunc {
 		})
 		c.Set(string(pgdb.CtxKeyUserID), claims.Subject)
 		c.Set(string(pgdb.CtxKeyUserRoles), claims.Roles)
+
+		// Propagate into the standard context.Context so services can read via ctx.Value.
+		ctx := context.WithValue(c.Request.Context(), pgdb.CtxKeyUserID, claims.Subject)
+		ctx = context.WithValue(ctx, pgdb.CtxKeyUserRoles, claims.Roles)
+		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
 	}

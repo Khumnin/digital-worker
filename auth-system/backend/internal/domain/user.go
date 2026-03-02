@@ -30,7 +30,7 @@ type User struct {
 	FirstName         string
 	LastName          string
 	MFAEnabled        bool
-	MFATOTPSecret     string // Encrypted at rest; empty if MFA not configured
+	MFATOTPSecret     *string // Encrypted at rest; nil if MFA not configured
 	FailedLoginCount  int
 	LockedUntil       *time.Time
 	EmailVerifiedAt   *time.Time

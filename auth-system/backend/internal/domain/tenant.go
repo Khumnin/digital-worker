@@ -107,3 +107,26 @@ type CreateTenantInput struct {
 	AdminEmail string
 	Config     TenantConfig
 }
+
+// TenantAPICredential represents a set of M2M API credentials for a tenant.
+// The client secret is never stored in plaintext — only its SHA-256 hash.
+type TenantAPICredential struct {
+	ID               uuid.UUID
+	TenantID         uuid.UUID
+	ClientID         string
+	ClientSecretHash string
+	CreatedAt        time.Time
+	RotatedAt        *time.Time
+	RevokedAt        *time.Time
+}
+
+// IsRevoked returns true if the credential has been revoked.
+func (c *TenantAPICredential) IsRevoked() bool {
+	return c.RevokedAt != nil
+}
+
+// Tenant credential errors.
+var (
+	ErrCredentialNotFound = errors.New("tenant API credential not found")
+	ErrCredentialRevoked  = errors.New("tenant API credential has been revoked")
+)

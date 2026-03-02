@@ -1,4 +1,5 @@
 # Local environment files — never commit secrets
+.env
 .env.local
 *.env.local
 
@@ -9,6 +10,7 @@ bin/
 # Go test coverage artifacts
 backend/coverage.out
 backend/coverage.html
+backend/test.tmp
 
 # Dev RSA key pairs — generated locally, never committed
 dev-keys/
@@ -31,3 +33,9 @@ Thumbs.db
 # Go workspace (if using go work)
 go.work
 go.work.sum
+
+# Node / Playwright (tests/)
+node_modules/
+tests/node_modules/
+tests/playwright-report/
+tests/test-results/

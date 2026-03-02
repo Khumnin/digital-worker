@@ -62,6 +62,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Password:  req.Password,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
+		IPAddress: c.ClientIP(),
+		UserAgent: c.Request.UserAgent(),
 	})
 	if err != nil {
 		respondWithServiceError(c, err)
@@ -192,7 +194,7 @@ func respondWithServiceError(c *gin.Context, err error) {
 		m = mapping{http.StatusConflict, "TENANT_ALREADY_EXISTS", "A tenant with this identifier already exists."}
 	case isError(err, "token reuse detected"):
 		m = mapping{http.StatusUnauthorized, "SUSPICIOUS_TOKEN_REUSE", "Your session has been revoked due to suspicious activity. Please log in again."}
-	case isError(err, "session has expired"), isError(err, "invalid refresh token"), isError(err, "session has been revoked"):
+	case isError(err, "session not found"), isError(err, "session has expired"), isError(err, "invalid refresh token"), isError(err, "session has been revoked"):
 		m = mapping{http.StatusUnauthorized, "INVALID_REFRESH_TOKEN", "Your session has expired. Please log in again."}
 	case isError(err, "password does not meet complexity requirements"):
 		m = mapping{http.StatusUnprocessableEntity, "VALIDATION_ERROR", err.Error()}

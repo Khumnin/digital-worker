@@ -44,6 +44,14 @@ type TenantRepository interface {
 	ListAll(ctx context.Context, limit, offset int) ([]*Tenant, int, error)
 }
 
+// TenantCredentialRepository defines data operations on tenant_api_credentials.
+type TenantCredentialRepository interface {
+	Create(ctx context.Context, tenantID uuid.UUID, clientID, secretHash string) (*TenantAPICredential, error)
+	FindByTenantID(ctx context.Context, tenantID uuid.UUID) (*TenantAPICredential, error)
+	FindByClientID(ctx context.Context, clientID string) (*TenantAPICredential, error)
+	Rotate(ctx context.Context, tenantID uuid.UUID, newClientID, newSecretHash string) (*TenantAPICredential, error)
+}
+
 // AuditRepository defines all data operations on the per-tenant audit_log table.
 type AuditRepository interface {
 	Append(ctx context.Context, event *AuditEvent) error
