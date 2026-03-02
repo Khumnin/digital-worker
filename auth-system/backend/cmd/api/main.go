@@ -95,6 +95,8 @@ func run() error {
 	tenantRepo := pgRepo.NewPostgresTenantRepo(pool)
 	roleRepo := pgRepo.NewPostgresRoleRepo(pool)
 	credRepo := pgRepo.NewPostgresCredentialRepo(pool)
+	oauthClientRepo := pgRepo.NewPostgresOAuthClientRepo(pool)
+	oauthCodeRepo := pgRepo.NewPostgresAuthCodeRepo(pool)
 
 	rateLimiter := redisRepo.NewRedisRateLimiter(redisClient)
 
@@ -127,6 +129,10 @@ func run() error {
 	adminSvc := service.NewAdminService(userRepo, sessionRepo, roleRepo, auditRepo, emailChannel)
 	auditSvc := service.NewAuditService(auditRepo)
 	jwtSvc := service.NewJWTService(keyStore)
+	oauthSvc := service.NewOAuthService(
+		oauthClientRepo, oauthCodeRepo, sessionRepo, auditRepo,
+		keyStore, cfg.JWT.AccessTokenTTL, cfg.Session.DefaultTTL,
+	)
 
 	tenantCache := middleware.NewInMemoryTenantCache(tenantRepo, cfg.Tenant.CacheTTL)
 
@@ -142,7 +148,7 @@ func run() error {
 		RoleHandler:      handler.NewRoleHandler(rbacSvc),
 		AuditHandler:     handler.NewAuditHandler(auditSvc),
 		WellKnownHandler: handler.NewWellKnownHandler(jwtSvc),
-		OAuthHandler:     handler.NewOAuthHandler(keyStore),
+		OAuthHandler:     handler.NewOAuthHandler(keyStore, oauthSvc),
 		JWTKeyStore:      keyStore,
 		TenantCache:      tenantCache,
 		RateLimiter:      rateLimiter,
