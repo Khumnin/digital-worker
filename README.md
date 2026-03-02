@@ -189,6 +189,25 @@ digital-worker/
 
 **All E2E tests remain green — 24/24 passed after Sprint 4 changes.**
 
+### Sprint 5 — OAuth 2.0 Authorization Code + PKCE
+
+**Deliverables completed**
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| US-11a | OAuth client registration — `POST /admin/oauth/clients` | ✅ |
+| US-11b | Authorization endpoint — `GET /oauth/authorize` with mandatory state + PKCE S256 | ✅ |
+| US-11c | Token exchange — `POST /oauth/token` with PKCE S256 verification, single-use codes, session issuance | ✅ |
+
+**Notes**
+- No external OAuth library — Authorization Code + PKCE S256 flow implemented directly using existing jwt/crypto utilities
+- US-11c security: code reuse detection (mark-used before token issuance), PKCE S256 mandatory (`plain` method rejected with 400), single-use codes enforced at DB level
+- API-only per ADR-003 — `/authorize` returns `{"code", "state"}` JSON; consuming app handles redirect
+- Token endpoint returns RFC 6749 §5.1 format: `access_token`, `refresh_token`, `token_type`, `expires_in`, `scope`
+- Audit events wired: `OAUTH_CLIENT_CREATED`, `OAUTH_CODE_ISSUED`, `OAUTH_TOKEN_ISSUED`
+
+**All E2E tests remain green — 24/24 passed after Sprint 5 changes.**
+
 ### Overall: 91 tests · 0 failures
 
 ---
