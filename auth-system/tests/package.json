@@ -1,0 +1,23 @@
+{
+  "name": "auth-system-e2e",
+  "version": "1.0.0",
+  "description": "Playwright API E2E tests for the Authentication System",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:ci": "playwright test --reporter=list",
+    "test:isolation": "playwright test e2e/08-cross-tenant-isolation.spec.ts",
+    "test:sprint1": "playwright test e2e/01-register-login.spec.ts e2e/03-password-reset.spec.ts",
+    "test:sprint2": "playwright test e2e/02-session.spec.ts",
+    "report": "playwright show-report"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.3.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
