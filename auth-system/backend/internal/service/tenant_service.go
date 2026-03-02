@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"tigersoft/auth-system/internal/domain"
 	"tigersoft/auth-system/internal/infrastructure/migrations"
+	"tigersoft/auth-system/pkg/crypto"
 )
 
 // TenantService handles tenant provisioning, retrieval, and lifecycle
@@ -18,6 +19,8 @@ type TenantService interface {
 	GetTenant(ctx context.Context, id string) (*domain.Tenant, error)
 	ListTenants(ctx context.Context, limit, offset int) ([]*domain.Tenant, int, error)
 	SuspendTenant(ctx context.Context, id string) error
+	GenerateAPICredentials(ctx context.Context, tenantID string) (clientID, clientSecret string, err error)
+	RotateAPICredentials(ctx context.Context, tenantID string) (clientID, clientSecret string, err error)
 }
 
 // ProvisionTenantInput carries the fields required to create a new tenant.
@@ -29,6 +32,7 @@ type ProvisionTenantInput struct {
 
 type tenantServiceImpl struct {
 	tenantRepo     domain.TenantRepository
+	credRepo       domain.TenantCredentialRepository
 	pool           *pgxpool.Pool
 	dbURL          string
 	tenantMigrPath string
@@ -38,6 +42,7 @@ type tenantServiceImpl struct {
 // NewTenantService constructs a TenantService with all dependencies injected.
 func NewTenantService(
 	tenantRepo domain.TenantRepository,
+	credRepo domain.TenantCredentialRepository,
 	pool *pgxpool.Pool,
 	dbURL string,
 	tenantMigrPath string,
@@ -45,6 +50,7 @@ func NewTenantService(
 ) TenantService {
 	return &tenantServiceImpl{
 		tenantRepo:     tenantRepo,
+		credRepo:       credRepo,
 		pool:           pool,
 		dbURL:          dbURL,
 		tenantMigrPath: tenantMigrPath,
@@ -73,6 +79,16 @@ func (s *tenantServiceImpl) ProvisionTenant(ctx context.Context, input Provision
 	if err := provisioner.Provision(ctx, tenant.SchemaName); err != nil {
 		return nil, fmt.Errorf("provision tenant schema %q: %w", tenant.SchemaName, err)
 	}
+
+	s.enqueueEmail(EmailTask{
+		Type:    EmailTypeInvitation,
+		ToEmail: tenant.AdminEmail,
+		ToName:  tenant.Name,
+		Extra: map[string]interface{}{
+			"tenant_name": tenant.Name,
+			"tenant_slug": tenant.Slug,
+		},
+	})
 
 	return tenant, nil
 }
@@ -114,4 +130,54 @@ func (s *tenantServiceImpl) SuspendTenant(ctx context.Context, id string) error 
 	}
 
 	return nil
+}
+
+// GenerateAPICredentials creates a new client_id + client_secret pair for the
+// tenant. The secret is returned once in plaintext and never again.
+func (s *tenantServiceImpl) GenerateAPICredentials(ctx context.Context, tenantIDStr string) (string, string, error) {
+	tenantID, err := uuid.Parse(tenantIDStr)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid tenant ID: %w", err)
+	}
+
+	clientID := uuid.New().String()
+	rawSecret, secretHash, err := crypto.GenerateTokenWithHash()
+	if err != nil {
+		return "", "", fmt.Errorf("generate client secret: %w", err)
+	}
+
+	if _, err := s.credRepo.Create(ctx, tenantID, clientID, secretHash); err != nil {
+		return "", "", fmt.Errorf("store api credential: %w", err)
+	}
+
+	return clientID, rawSecret, nil
+}
+
+// RotateAPICredentials revokes all existing credentials for the tenant and
+// issues a new client_id + client_secret pair. Old credentials are immediately
+// invalidated.
+func (s *tenantServiceImpl) RotateAPICredentials(ctx context.Context, tenantIDStr string) (string, string, error) {
+	tenantID, err := uuid.Parse(tenantIDStr)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid tenant ID: %w", err)
+	}
+
+	newClientID := uuid.New().String()
+	rawSecret, secretHash, err := crypto.GenerateTokenWithHash()
+	if err != nil {
+		return "", "", fmt.Errorf("generate client secret: %w", err)
+	}
+
+	if _, err := s.credRepo.Rotate(ctx, tenantID, newClientID, secretHash); err != nil {
+		return "", "", fmt.Errorf("rotate api credential: %w", err)
+	}
+
+	return newClientID, rawSecret, nil
+}
+
+func (s *tenantServiceImpl) enqueueEmail(task EmailTask) {
+	select {
+	case s.emailCh <- task:
+	default:
+	}
 }

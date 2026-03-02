@@ -125,3 +125,40 @@ func (h *TenantHandler) SuspendTenant(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Tenant has been suspended."})
 }
+
+// GenerateCredentials handles POST /api/v1/admin/tenants/:id/credentials.
+// Issues a new client_id and client_secret for M2M authentication.
+// The secret is returned once and cannot be retrieved again.
+func (h *TenantHandler) GenerateCredentials(c *gin.Context) {
+	id := c.Param("id")
+
+	clientID, secret, err := h.tenantSvc.GenerateAPICredentials(c.Request.Context(), id)
+	if err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"client_id":     clientID,
+		"client_secret": secret,
+		"warning":       "This is the only time the client_secret will be shown. Store it securely.",
+	})
+}
+
+// RotateCredentials handles POST /api/v1/admin/tenants/:id/credentials/rotate.
+// Revokes all existing credentials and issues a new client_id + client_secret.
+func (h *TenantHandler) RotateCredentials(c *gin.Context) {
+	id := c.Param("id")
+
+	clientID, secret, err := h.tenantSvc.RotateAPICredentials(c.Request.Context(), id)
+	if err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"client_id":     clientID,
+		"client_secret": secret,
+		"warning":       "Previous credentials have been revoked. Store the new secret securely.",
+	})
+}
