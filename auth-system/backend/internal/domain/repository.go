@@ -152,3 +152,17 @@ var (
 	ErrRoleNotAssigned     = errors.New("user does not have this role")
 	ErrSystemRole          = errors.New("cannot delete a system role")
 )
+
+// OAuthClientRepository defines data operations on the oauth_clients table (per-tenant schema).
+type OAuthClientRepository interface {
+	Create(ctx context.Context, client *OAuthClient) error
+	FindByClientID(ctx context.Context, clientID string) (*OAuthClient, error)
+	ListByCreator(ctx context.Context, createdBy uuid.UUID) ([]*OAuthClient, error)
+}
+
+// AuthorizationCodeRepository defines data operations on the oauth_authorization_codes table.
+type AuthorizationCodeRepository interface {
+	Create(ctx context.Context, code *AuthorizationCode) error
+	FindByCodeHash(ctx context.Context, codeHash string) (*AuthorizationCode, error)
+	MarkUsed(ctx context.Context, codeHash string) error
+}
