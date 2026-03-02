@@ -100,6 +100,12 @@ func run() error {
 	socialAccountRepo := pgRepo.NewPostgresSocialAccountRepo(pool)
 
 	rateLimiter := redisRepo.NewRedisRateLimiter(redisClient)
+	mfaRepo := pgRepo.NewPostgresMFARepo(pool)
+
+	mfaSvc := service.NewMFAService(userRepo, mfaRepo, auditRepo, cfg.JWT.Issuer)
+	profileSvc := service.NewProfileService(
+		userRepo, sessionRepo, auditRepo, emailChannel, cfg.Email.VerificationTokenTTL,
+	)
 
 	authSvcCfg := service.AuthServiceConfig{
 		AccessTokenTTL:         cfg.JWT.AccessTokenTTL,
@@ -111,7 +117,7 @@ func run() error {
 
 	authSvc := service.NewAuthService(
 		userRepo, sessionRepo, tokenRepo, auditRepo, tenantRepo, roleRepo,
-		keyStore, emailChannel, authSvcCfg,
+		keyStore, emailChannel, mfaSvc, authSvcCfg,
 	)
 	emailVerificationSvc := service.NewEmailVerificationService(
 		userRepo, tokenRepo, auditRepo, emailChannel, cfg.Email.VerificationTokenTTL,
@@ -149,7 +155,8 @@ func run() error {
 		EmailHandler:     handler.NewEmailHandler(emailVerificationSvc),
 		PasswordHandler:  handler.NewPasswordHandler(passwordSvc),
 		SessionHandler:   handler.NewSessionHandler(sessionSvc),
-		UserHandler:      handler.NewUserHandler(authSvc),
+		UserHandler:      handler.NewUserHandler(profileSvc, mfaSvc),
+		MFAHandler:       handler.NewMFAHandler(mfaSvc),
 		AdminHandler:     handler.NewAdminHandler(adminSvc),
 		TenantHandler:    handler.NewTenantHandler(tenantSvc),
 		RoleHandler:      handler.NewRoleHandler(rbacSvc),

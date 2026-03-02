@@ -78,6 +78,17 @@ func (r *PostgresTenantRepo) UpdateStatus(ctx context.Context, id uuid.UUID, sta
 	return err
 }
 
+func (r *PostgresTenantRepo) UpdateConfig(ctx context.Context, id uuid.UUID, config domain.TenantConfig) error {
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("marshal tenant config: %w", err)
+	}
+	_, err = r.pool.Exec(ctx, `
+		UPDATE tenants SET config = $2, updated_at = now() WHERE id = $1
+	`, id, configJSON)
+	return err
+}
+
 func (r *PostgresTenantRepo) ListActiveSchemaNames(ctx context.Context) ([]string, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT schema_name FROM tenants WHERE status = 'active' AND deleted_at IS NULL

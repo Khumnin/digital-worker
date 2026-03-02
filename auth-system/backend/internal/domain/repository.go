@@ -40,6 +40,7 @@ type TenantRepository interface {
 	FindBySchemaName(ctx context.Context, schemaName string) (*Tenant, error)
 	Create(ctx context.Context, input CreateTenantInput) (*Tenant, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status TenantStatus) error
+	UpdateConfig(ctx context.Context, id uuid.UUID, config TenantConfig) error
 	ListActiveSchemaNames(ctx context.Context) ([]string, error)
 	ListAll(ctx context.Context, limit, offset int) ([]*Tenant, int, error)
 }

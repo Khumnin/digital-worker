@@ -21,6 +21,7 @@ type Dependencies struct {
 	PasswordHandler  *handler.PasswordHandler
 	SessionHandler   *handler.SessionHandler
 	UserHandler      *handler.UserHandler
+	MFAHandler       *handler.MFAHandler
 	AdminHandler     *handler.AdminHandler
 	TenantHandler    *handler.TenantHandler
 	RoleHandler      *handler.RoleHandler
@@ -95,6 +96,9 @@ func New(deps Dependencies) *gin.Engine {
 		authed.POST("/auth/logout/all", deps.AuthHandler.LogoutAll)
 		authed.GET("/users/me", deps.UserHandler.GetMe)
 		authed.PUT("/users/me", deps.UserHandler.UpdateMe)
+		authed.POST("/users/me/mfa/generate", deps.MFAHandler.Generate)
+		authed.POST("/users/me/mfa/confirm", deps.MFAHandler.Confirm)
+		authed.DELETE("/users/me/mfa", deps.MFAHandler.Disable)
 	}
 
 	adminRole := middleware.RequireRole("admin")
@@ -110,6 +114,7 @@ func New(deps Dependencies) *gin.Engine {
 		admin.DELETE("/users/:id/roles/:roleId", deps.RoleHandler.UnassignRole)
 		admin.GET("/audit-log", deps.AuditHandler.List)
 		admin.POST("/oauth/clients", deps.OAuthHandler.RegisterClient)
+		admin.PUT("/tenant/mfa", deps.TenantHandler.UpdateMFAConfig)
 	}
 
 	superAdminRole := middleware.RequireRole("super_admin")

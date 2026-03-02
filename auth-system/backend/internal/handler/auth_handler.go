@@ -2,12 +2,14 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"tigersoft/auth-system/pkg/apierror"
+	"tigersoft/auth-system/internal/domain"
 	"tigersoft/auth-system/internal/service"
+	"tigersoft/auth-system/pkg/apierror"
 )
 
 // AuthHandler handles HTTP requests for core authentication flows.
@@ -34,8 +36,9 @@ type registerResponse struct {
 }
 
 type loginRequest struct {
-	Email    string `json:"email"    validate:"required,email"`
-	Password string `json:"password" validate:"required"`
+	Email    string `json:"email"      validate:"required,email"`
+	Password string `json:"password"   validate:"required"`
+	TOTPCode string `json:"totp_code"` // optional; required when MFA is enabled
 }
 
 type loginResponse struct {
@@ -78,7 +81,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
-// Login handles POST /api/v1/auth/login
+// Login handles POST /api/v1/auth/login.
+// When the account has MFA enabled and no totp_code is provided, the handler
+// returns HTTP 202 to signal that MFA input is required (not a failure).
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req loginRequest
 	if !bindAndValidate(c, &req) {
@@ -88,10 +93,19 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	result, err := h.authSvc.Login(c.Request.Context(), service.LoginInput{
 		Email:     req.Email,
 		Password:  req.Password,
+		TOTPCode:  req.TOTPCode,
 		IPAddress: c.ClientIP(),
 		UserAgent: c.Request.UserAgent(),
 	})
 	if err != nil {
+		// 202: credentials valid but MFA code is still needed — not an error.
+		if errors.Is(err, domain.ErrMFARequired) {
+			c.JSON(http.StatusAccepted, gin.H{
+				"mfa_required": true,
+				"message":      "TOTP code required to complete login.",
+			})
+			return
+		}
 		respondWithServiceError(c, err)
 		return
 	}
@@ -204,6 +218,10 @@ func respondWithServiceError(c *gin.Context, err error) {
 		m = mapping{http.StatusConflict, "ROLE_ALREADY_EXISTS", "A role with this name already exists."}
 	case isError(err, "user already has this role"):
 		m = mapping{http.StatusConflict, "ROLE_ALREADY_ASSIGNED", "The user already has this role."}
+	case isError(err, "TOTP code is invalid or has expired"):
+		m = mapping{http.StatusUnauthorized, "INVALID_TOTP_CODE", "The TOTP code is invalid or has expired."}
+	case isError(err, "MFA enrollment is required for this organization"):
+		m = mapping{http.StatusForbidden, "MFA_ENROLLMENT_REQUIRED", "MFA enrollment is required for this organization. Please enroll before logging in."}
 	default:
 		c.Error(err)
 		m = mapping{http.StatusInternalServerError, "INTERNAL_ERROR", "An unexpected error occurred. Please try again later."}

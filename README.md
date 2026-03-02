@@ -232,6 +232,45 @@ digital-worker/
 
 **All unit tests remain green — 67/67 passed after Sprint 6 changes.**
 
+### Sprint 7 — MFA and User Profile
+
+**Deliverables completed**
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| S1 | TOTP MFA setup — enroll via QR code, confirm first code, receive 8 backup codes | ✅ |
+| S1 | TOTP MFA verification on login — step-up after password; 202 when code missing | ✅ |
+| S2 | Per-tenant MFA enforcement — admin toggle; unenrolled users blocked with 403 | ✅ |
+| S5 | Self-service User Profile API — update name, change password, request email change | ✅ |
+
+**Notes**
+- S1: RFC 6238, SHA1, 6-digit, 30s window, ±1 window clock-drift tolerance (`pquerna/otp`); backup codes stored as SHA-256 hashes, consumed atomically
+- S1 login step-up: returns **HTTP 202** `{"mfa_required": true}` when MFA enabled but no `totp_code` supplied; backup codes accepted as fallback
+- S2: `PUT /admin/tenant/mfa` toggles `mfa_required`; login enforces enrollment — `MFA_ENROLLMENT_REQUIRED` (403) if user unenrolled on required tenant
+- S5: `GET /users/me` now returns full profile (name, email, MFA status); `PUT /users/me` dispatches by fields — password change revokes all sessions
+- New audit events wired: `MFA_ENABLED`, `MFA_DISABLED`, `MFA_VERIFIED`, `MFA_FAILED`, `MFA_ENFORCEMENT_CHANGED`, `PROFILE_UPDATED`
+
+**New endpoints**
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/users/me/mfa/generate` | Returns `otpauth://` URL + base32 secret for QR code |
+| `POST` | `/users/me/mfa/confirm` | Verifies first TOTP code, enables MFA, returns backup codes (once) |
+| `DELETE` | `/users/me/mfa` | Disables MFA after password verification |
+| `PUT` | `/admin/tenant/mfa` | Admin toggle for per-tenant MFA enforcement |
+
+**New files added**
+- `internal/domain/mfa.go` — `MFABackupCode` struct + `MFARepository` interface
+- `internal/repository/postgres/mfa_repo.go` — backup code CRUD against `mfa_backup_codes` table
+- `internal/service/mfa_service.go` — TOTP enroll/confirm/verify/disable
+- `internal/service/profile_service.go` — GetProfile, UpdateProfile, ChangePassword, RequestEmailChange
+- `internal/handler/mfa_handler.go` — Generate, Confirm, Disable endpoints
+- `migrations/tenant/000013_add_mfa_fields` — `mfa_totp_secret` column on users
+- `migrations/tenant/000014_add_mfa_backup_codes` — `mfa_backup_codes` table
+
+**New dependency:** `github.com/pquerna/otp v1.4.0`
+
+**All unit tests remain green — 67/67 passed after Sprint 7 changes.**
+
 ### Overall: 91 tests · 0 failures
 
 ---
