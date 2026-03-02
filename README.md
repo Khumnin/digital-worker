@@ -87,25 +87,89 @@ digital-worker/
 
 ---
 
+## 🧪 Test Results
+
+### Sprint 1 — Core Auth Flows
+
+**Unit Tests** · `go test ./...` · 67/67 passed
+
+| Package | Tests | Status |
+|---------|------:|--------|
+| `internal/domain` | 33 | ✅ Pass |
+| `pkg/apierror` | 7 | ✅ Pass |
+| `pkg/crypto` | 14 | ✅ Pass |
+| `pkg/jwtutil` | 13 | ✅ Pass |
+| `pkg/validator` | 15 | ✅ Pass |
+
+**E2E API Tests** · Playwright · 15/15 passed
+
+| Test | Story | Status |
+|------|-------|--------|
+| 201 on valid registration | US-01 | ✅ |
+| 409 on duplicate email | US-01 | ✅ |
+| 422 on weak password | US-01 | ✅ |
+| 422 on invalid email format | US-01 | ✅ |
+| 401 on wrong credentials — ambiguous error message | US-03 | ✅ |
+| Response contains no sensitive data on failure | US-03 | ✅ |
+| 401 on invalid refresh token | US-04 | ✅ |
+| 401 on empty refresh token | US-04 | ✅ |
+| 401 logout without auth token | US-05 | ✅ |
+| 200 for registered email (anti-enumeration) | US-06 | ✅ |
+| 200 for unknown email (anti-enumeration) | US-06 | ✅ |
+| Response body identical for both | US-06 | ✅ |
+| Tenant A token cannot list tenant B users | US-08b | ✅ |
+| No tenant B data in tenant A response | US-08b | ✅ |
+| Cross-tenant token swap returns 401/403 — never 200 | US-08b | ✅ |
+
+### Sprint 2 — Sessions, Security & Audit
+
+**Deliverables completed**
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| US-04 | Token rotation + family revocation on reuse detection | ✅ |
+| US-05 | Single-device and all-devices logout | ✅ |
+| US-14 | Redis sliding-window rate limiting + account lockout (5 attempts / 15 min) | ✅ |
+| US-15 | Audit log — 19 event types wired, filterable paginated read API | ✅ |
+| M15 | Secure headers — HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy | ✅ |
+
+**Audit events wired (19 types)**
+
+`USER_REGISTERED` · `EMAIL_VERIFICATION_SENT` · `EMAIL_VERIFIED` · `LOGIN_SUCCESS` · `LOGIN_FAILURE` · `ACCOUNT_LOCKED` · `LOGOUT` · `LOGOUT_ALL` · `TOKEN_REFRESHED` · `SUSPICIOUS_TOKEN_REUSE` · `PASSWORD_RESET_REQUESTED` · `PASSWORD_RESET_COMPLETED` · `PASSWORD_CHANGED` · `USER_INVITED` · `USER_DISABLED` · `USER_DELETED` · `ROLE_ASSIGNED` · `ROLE_UNASSIGNED` · `OAUTH_CLIENT_CREATED`
+
+**All Sprint 1 E2E tests remain green — 15/15 passed after Sprint 2 changes.**
+
+### Overall: 82 tests · 0 failures
+
+---
+
 ## 🚀 Getting Started
 
-All planning and documentation is complete. Follow the steps below to begin implementation:
-
-### 1. Scaffold the Go Monorepo
-Refer to `docs/auth-system/implementation-guide.md` for the full project scaffold.
-
-### 2. Start Local Infrastructure
+### 1. Start Local Infrastructure
 ```bash
 docker compose up -d
 ```
 This brings up: **PostgreSQL** · **Redis** · **HashiCorp Vault** · **Mailhog**
 
-### 3. Begin Sprint 1
-Implement the core auth flows in order:
-1. User Registration
-2. Login (JWT issuance)
-3. Email Verification
-4. Password Reset
+### 2. Run Migrations
+```bash
+cd auth-system/backend
+go run ./cmd/migrate/main.go -scope=global -direction=up
+```
+
+### 3. Start the API
+```bash
+go run ./cmd/api/main.go
+```
+
+### 4. Run Tests
+```bash
+# Unit tests
+go test ./...
+
+# E2E tests
+cd auth-system/tests && npx playwright test --project=api
+```
 
 ---
 
