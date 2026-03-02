@@ -71,6 +71,8 @@ type RegisterInput struct {
 	Password  string
 	FirstName string
 	LastName  string
+	IPAddress string
+	UserAgent string
 }
 
 type RegisterResult struct {
@@ -151,6 +153,14 @@ func (s *authServiceImpl) Register(ctx context.Context, input RegisterInput) (*R
 		ToName:    user.FullName(),
 		Token:     rawToken,
 		ExpiresAt: expiresAt,
+	})
+
+	s.writeAuditEvent(ctx, domain.AuditEvent{
+		EventType:    domain.EventUserRegistered,
+		ActorID:      &user.ID,
+		ActorIP:      input.IPAddress,
+		ActorUA:      input.UserAgent,
+		TargetUserID: &user.ID,
 	})
 
 	slog.Info("user registered", "user_id", user.ID, "tenant_id", tenant.ID)

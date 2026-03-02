@@ -62,6 +62,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Password:  req.Password,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
+		IPAddress: c.ClientIP(),
+		UserAgent: c.Request.UserAgent(),
 	})
 	if err != nil {
 		respondWithServiceError(c, err)
