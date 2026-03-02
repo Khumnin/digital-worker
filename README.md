@@ -170,6 +170,25 @@ digital-worker/
 
 **All previous E2E tests remain green — 24/24 passed after Sprint 3 changes.**
 
+### Sprint 4 — RBAC, JWT Claims & Token Introspection
+
+**Deliverables completed**
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| US-09 | Assign / unassign tenant-scoped roles — audit events wired | ✅ |
+| US-10 | JWT now carries real per-user `roles[]` claim (fetched from DB at login) | ✅ |
+| M16 | Admin user management — invite, disable, delete, list users | ✅ |
+| M17 | Token introspection — RFC 7662 `POST /oauth/introspect` | ✅ |
+| M18 | JWKS endpoint — RFC 7517 `GET /.well-known/jwks.json` | ✅ |
+
+**Notes**
+- US-10: login now calls `roleRepo.GetUserRoles()` per request; falls back to `["user"]` on error; logs a warning if a user holds > 20 roles (JWT size concern per DoD)
+- M17: verifies the bearer token signature + claims; returns `{"active": false}` for any invalid/expired token — no information leakage; accepts both JSON and form-encoded bodies (RFC 7662 §2.1)
+- US-09, M16, M18 were already fully scaffolded from Sprint 1/2 and required no new code
+
+**All E2E tests remain green — 24/24 passed after Sprint 4 changes.**
+
 ### Overall: 91 tests · 0 failures
 
 ---
