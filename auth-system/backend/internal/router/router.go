@@ -119,6 +119,8 @@ func New(deps Dependencies) *gin.Engine {
 		superAdmin.GET("/tenants/:id", deps.TenantHandler.GetTenant)
 		superAdmin.GET("/tenants", deps.TenantHandler.ListTenants)
 		superAdmin.PUT("/tenants/:id/suspend", deps.TenantHandler.SuspendTenant)
+		superAdmin.POST("/tenants/:id/credentials", deps.TenantHandler.GenerateCredentials)
+		superAdmin.POST("/tenants/:id/credentials/rotate", deps.TenantHandler.RotateCredentials)
 	}
 
 	oauth := v1.Group("/oauth")

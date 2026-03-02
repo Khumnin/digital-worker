@@ -139,7 +139,38 @@ digital-worker/
 
 **All Sprint 1 E2E tests remain green — 15/15 passed after Sprint 2 changes.**
 
-### Overall: 82 tests · 0 failures
+### Sprint 3 — Multi-Tenancy Foundation
+
+**Deliverables completed**
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| US-07a | Tenant provisioning — schema migration runner + admin invite email | ✅ |
+| US-07b | Per-tenant migration runner (golang-migrate, `file://migrations/tenant`) | ✅ |
+| US-07c | Tenant API credentials — generate & rotate M2M client_id/client_secret | ✅ |
+| US-08a | Schema-per-tenant routing — `search_path` set per request via `X-Tenant-ID` | ✅ |
+| US-08b | Cross-tenant isolation — 12 test cases, all passing | ✅ |
+
+**E2E API Tests** · Playwright · 24/24 passed (12 new US-08b isolation tests)
+
+| Test | Story | Status |
+|------|-------|--------|
+| TC-08b-01: tenant A token cannot list tenant B users | US-08b | ✅ |
+| TC-08b-02: no tenant B data appears in tenant A response | US-08b | ✅ |
+| TC-08b-03: cross-tenant token swap returns 401/403 — never 200 | US-08b | ✅ |
+| TC-08b-04: request without X-Tenant-ID header is rejected | US-08b | ✅ |
+| TC-08b-05: unknown tenant ID returns 4xx — never leaks data | US-08b | ✅ |
+| TC-08b-06: response headers do not expose tenant schema | US-08b | ✅ |
+| TC-08b-07: error body for tenant A does not contain tenant B identifiers | US-08b | ✅ |
+| TC-08b-08: password reset response identical regardless of tenant membership | US-08b | ✅ |
+| TC-08b-09: refresh token issued for tenant A cannot be replayed against tenant B | US-08b | ✅ |
+| TC-08b-10: registering in tenant A does not create a user visible in tenant B | US-08b | ✅ |
+| TC-08b-11: login failure message identical for both tenants — no enumeration | US-08b | ✅ |
+| TC-08b-12: malformed tenant ID (SQL injection attempt) is rejected | US-08b | ✅ |
+
+**All previous E2E tests remain green — 24/24 passed after Sprint 3 changes.**
+
+### Overall: 91 tests · 0 failures
 
 ---
 

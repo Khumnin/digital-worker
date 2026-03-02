@@ -94,6 +94,7 @@ func run() error {
 	auditRepo := pgRepo.NewPostgresAuditRepo(pool)
 	tenantRepo := pgRepo.NewPostgresTenantRepo(pool)
 	roleRepo := pgRepo.NewPostgresRoleRepo(pool)
+	credRepo := pgRepo.NewPostgresCredentialRepo(pool)
 
 	rateLimiter := redisRepo.NewRedisRateLimiter(redisClient)
 
@@ -119,7 +120,7 @@ func run() error {
 		userRepo, sessionRepo, auditRepo, keyStore, cfg.JWT.AccessTokenTTL,
 	)
 	tenantSvc := service.NewTenantService(
-		tenantRepo, pool, cfg.Database.URL,
+		tenantRepo, credRepo, pool, cfg.Database.URL,
 		"file://migrations/tenant", emailChannel,
 	)
 	rbacSvc := service.NewRBACService(roleRepo, userRepo, auditRepo)
