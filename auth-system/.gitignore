@@ -1,0 +1,33 @@
+# Local environment files — never commit secrets
+.env.local
+*.env.local
+
+# Go build output
+backend/bin/
+bin/
+
+# Go test coverage artifacts
+backend/coverage.out
+backend/coverage.html
+
+# Dev RSA key pairs — generated locally, never committed
+dev-keys/
+*.pem
+
+# Go debugger binary
+__debug_bin
+__debug_bin*
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go workspace (if using go work)
+go.work
+go.work.sum

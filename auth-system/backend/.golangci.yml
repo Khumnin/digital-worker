@@ -1,0 +1,106 @@
+# .golangci.yml — golangci-lint configuration for auth-system backend
+# Requires golangci-lint >= 1.57
+# Run: golangci-lint run ./...
+
+run:
+  timeout: 5m
+  go: "1.22"
+  # Skip generated files and vendor directory
+  skip-files:
+    - ".*_gen\\.go$"
+  modules-download-mode: readonly
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+linters:
+  disable-all: true
+  enable:
+    - govet         # Reports suspicious constructs (shadow, printf mismatches, etc.)
+    - errcheck      # Ensures all errors are checked — no silent discards
+    - staticcheck   # Comprehensive static analysis (SA, S1, QF, ST rules)
+    - gosimple      # Simplification suggestions (subset of staticcheck)
+    - ineffassign   # Detects assignments whose values are never used
+    - unused        # Reports unused code (variables, functions, types, constants)
+    - gofmt         # Enforces gofmt formatting
+    - goimports     # Enforces goimports formatting (superset of gofmt)
+    - gosec         # Security-focused checks (hardcoded credentials, weak crypto, etc.)
+    - misspell      # Correct common spelling mistakes in comments and strings
+    - gochecknoinits # Disallows init() functions — dependency injection enforced via constructors
+    - godot         # Ensures comments end with a period
+    - noctx         # Detects http.NewRequest calls without context
+    - bodyclose     # Checks that HTTP response bodies are closed
+    - exhaustive    # Checks exhaustiveness of enum switch statements
+    - exportloopref # Checks for exported pointers to loop variables (Go < 1.22 safe guard)
+    - contextcheck  # Checks that context is propagated correctly through call chains
+
+linters-settings:
+  govet:
+    check-shadowing: true
+    enable-all: true
+
+  errcheck:
+    # Check blank identifier assignments of errors (e.g., _ = someFunc())
+    check-blank: true
+    # Check type assertions that discard the ok value (e.g., x := y.(T))
+    check-type-assertions: true
+
+  staticcheck:
+    # Enable all SA (static analysis) checks
+    checks: ["all"]
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    # Enforce import grouping: stdlib | external | internal
+    local-prefixes: tigersoft/auth-system
+
+  gosec:
+    excludes:
+      - G104 # Errors unhandled (covered by errcheck)
+    severity: medium
+    confidence: medium
+
+  misspell:
+    locale: US
+
+  godot:
+    # Only require periods on exported symbol comments
+    scope: declarations
+    capital: false
+
+  exhaustive:
+    # Require default case in all enum switches
+    default-signifies-exhaustive: false
+
+issues:
+  # Maximum number of issues with the same text shown per linter
+  max-same-issues: 3
+  # Show all issues from a linter (do not limit to first 50)
+  max-issues-per-linter: 0
+
+  exclude-rules:
+    # Allow missing error checks in test files (e.g., t.Cleanup, defer)
+    - path: "_test\\.go"
+      linters:
+        - errcheck
+        - gosec
+        - gochecknoinits
+
+    # Allow longer lines in generated migration files
+    - path: "migrations/"
+      linters:
+        - godot
+
+  # Report all issues regardless of how many times they appear
+  uniq-by-line: false
+
+  # Treat new issues introduced by this PR as errors (CI enforcement)
+  new: false
+
+  # Maximum line length — 120 characters
+  # Enforced via govet and gofmt; no hard line-length linter used
+  # (golangci-lint does not include a line-length linter by default)

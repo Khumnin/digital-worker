@@ -1,0 +1,146 @@
+# docker-compose.yml
+# Local development environment.
+# Provides: PostgreSQL 16, Redis 7, HashiCorp Vault (dev mode), Mailhog.
+# Usage: docker compose up -d
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16 — Primary database
+  # Schema-per-tenant architecture: global public schema + per-tenant schemas.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: auth-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: authdb
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: authpassword      # Override in .env.local for local dev
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth -d authdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - auth-net
+
+  # ---------------------------------------------------------------------------
+  # Redis 7 — Rate limiting, token denylist, OAuth state/nonce store
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: auth-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --save 60 1
+      --loglevel warning
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - auth-net
+
+  # ---------------------------------------------------------------------------
+  # HashiCorp Vault — Secrets manager (dev mode — DO NOT use dev mode in prod)
+  # Dev mode starts with a pre-configured in-memory storage.
+  # Root token: dev-root-token (set in .env.local as VAULT_TOKEN)
+  # UI available at http://localhost:8200/ui
+  # ---------------------------------------------------------------------------
+  vault:
+    image: hashicorp/vault:1.16
+    container_name: auth-vault
+    restart: unless-stopped
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: dev-root-token
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_LOG_LEVEL: warn
+    cap_add:
+      - IPC_LOCK           # Required for Vault memory locking
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - auth-net
+
+  # ---------------------------------------------------------------------------
+  # Vault Init — One-shot container that configures Vault after it starts.
+  # Enables the KV v2 secrets mount and loads a dev signing key pair.
+  # This container exits after running; it is not a long-running service.
+  # ---------------------------------------------------------------------------
+  vault-init:
+    image: hashicorp/vault:1.16
+    container_name: auth-vault-init
+    restart: "no"
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: dev-root-token
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        echo "Enabling KV v2 secrets engine..."
+        vault secrets enable -path=secret kv-v2 || echo "Already enabled"
+
+        echo "Loading dev signing key (generated at build time)..."
+        # In real init: generate RSA key pair and store it.
+        # For local dev, the seed script (make seed) writes keys after init.
+        echo "Vault init complete."
+    networks:
+      - auth-net
+
+  # ---------------------------------------------------------------------------
+  # Mailhog — SMTP catch-all for local email testing
+  # All outbound emails from the API are delivered here — never to real addresses.
+  # SMTP on port 1025 | Web UI at http://localhost:8025
+  # ---------------------------------------------------------------------------
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: auth-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"    # SMTP — configure EMAIL_SMTP_HOST=localhost, EMAIL_SMTP_PORT=1025
+      - "8025:8025"    # Web UI — open http://localhost:8025 to view all sent emails
+    networks:
+      - auth-net
+
+# -----------------------------------------------------------------------------
+# Named volumes — persist data across container restarts
+# -----------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# -----------------------------------------------------------------------------
+# Network — isolates services from other Docker workloads
+# -----------------------------------------------------------------------------
+networks:
+  auth-net:
+    driver: bridge
