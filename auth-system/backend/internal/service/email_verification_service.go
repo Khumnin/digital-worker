@@ -118,6 +118,12 @@ func (s *emailVerificationServiceImpl) ResendVerification(ctx context.Context, e
 		ExpiresAt: expiresAt,
 	})
 
+	s.writeAuditEvent(ctx, domain.AuditEvent{
+		EventType:    domain.EventEmailVerificationSent,
+		ActorID:      &user.ID,
+		TargetUserID: &user.ID,
+	})
+
 	return nil
 }
 

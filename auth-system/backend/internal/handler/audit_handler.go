@@ -4,8 +4,10 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"tigersoft/auth-system/internal/domain"
 	"tigersoft/auth-system/internal/service"
 )
@@ -22,6 +24,7 @@ func NewAuditHandler(svc service.AuditService) *AuditHandler {
 
 // List handles GET /api/v1/admin/audit-log.
 // Supports pagination via limit and offset query parameters.
+// Supports optional filtering via event_type, actor_id, target_user_id, from, to.
 // Maximum page size is capped at 500 to protect against runaway queries.
 func (h *AuditHandler) List(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
@@ -37,6 +40,34 @@ func (h *AuditHandler) List(c *gin.Context) {
 	filter := domain.AuditFilter{
 		Limit:  limit,
 		Offset: offset,
+	}
+
+	if et := c.Query("event_type"); et != "" {
+		filter.EventType = &et
+	}
+
+	if aid := c.Query("actor_id"); aid != "" {
+		if id, err := uuid.Parse(aid); err == nil {
+			filter.ActorID = &id
+		}
+	}
+
+	if tid := c.Query("target_user_id"); tid != "" {
+		if id, err := uuid.Parse(tid); err == nil {
+			filter.TargetUserID = &id
+		}
+	}
+
+	if from := c.Query("from"); from != "" {
+		if t, err := time.Parse(time.RFC3339, from); err == nil {
+			filter.From = &t
+		}
+	}
+
+	if to := c.Query("to"); to != "" {
+		if t, err := time.Parse(time.RFC3339, to); err == nil {
+			filter.To = &t
+		}
 	}
 
 	events, total, err := h.auditSvc.List(c.Request.Context(), filter)

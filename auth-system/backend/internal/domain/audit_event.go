@@ -14,6 +14,8 @@ const (
 	EventSuspiciousTokenReuse  EventType = "SUSPICIOUS_TOKEN_REUSE"
 
 	// Account lifecycle events
+	EventUserRegistered        EventType = "USER_REGISTERED"
+	EventEmailVerificationSent EventType = "EMAIL_VERIFICATION_SENT"
 	EventEmailVerified         EventType = "EMAIL_VERIFIED"
 	EventPasswordChanged       EventType = "PASSWORD_CHANGED"
 	EventPasswordResetReq      EventType = "PASSWORD_RESET_REQUESTED"
