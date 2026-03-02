@@ -29,6 +29,7 @@ type authServiceImpl struct {
 	tokenRepo   domain.TokenRepository
 	auditRepo   domain.AuditRepository
 	tenantRepo  domain.TenantRepository
+	roleRepo    domain.RoleRepository
 	jwtSvc      jwtutil.Signer
 	emailCh     chan<- EmailTask
 	cfg         AuthServiceConfig
@@ -50,6 +51,7 @@ func NewAuthService(
 	tokenRepo domain.TokenRepository,
 	auditRepo domain.AuditRepository,
 	tenantRepo domain.TenantRepository,
+	roleRepo domain.RoleRepository,
 	jwtSvc jwtutil.Signer,
 	emailCh chan<- EmailTask,
 	cfg AuthServiceConfig,
@@ -60,6 +62,7 @@ func NewAuthService(
 		tokenRepo:   tokenRepo,
 		auditRepo:   auditRepo,
 		tenantRepo:  tenantRepo,
+		roleRepo:    roleRepo,
 		jwtSvc:      jwtSvc,
 		emailCh:     emailCh,
 		cfg:         cfg,
@@ -273,10 +276,12 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 		sessionTTL = time.Duration(tenant.Config.SessionTTLSeconds) * time.Second
 	}
 
+	roleNames := s.resolveUserRoles(ctx, user.ID)
+
 	accessToken, err := s.jwtSvc.Sign(jwtutil.Claims{
 		Subject:  user.ID.String(),
 		TenantID: tenant.ID.String(),
-		Roles:    []string{"user"},
+		Roles:    roleNames,
 		TTL:      s.cfg.AccessTokenTTL,
 	})
 	if err != nil {
@@ -383,6 +388,31 @@ func (s *authServiceImpl) writeAuditEvent(ctx context.Context, event domain.Audi
 	if err := s.auditRepo.Append(ctx, &event); err != nil {
 		slog.Error("failed to write audit event", "event_type", event.EventType, "error", err)
 	}
+}
+
+// resolveUserRoles fetches the user's assigned roles from the tenant schema and
+// returns their names as a string slice for inclusion in JWT claims (US-10).
+// Falls back to []string{"user"} on error so login is never blocked by an RBAC read failure.
+// Logs a warning if a user has more than 20 roles (JWT size concern per US-10 DoD).
+func (s *authServiceImpl) resolveUserRoles(ctx context.Context, userID uuid.UUID) []string {
+	roles, err := s.roleRepo.GetUserRoles(ctx, userID)
+	if err != nil {
+		slog.Warn("failed to fetch user roles for JWT; falling back to [user]",
+			"user_id", userID, "error", err)
+		return []string{"user"}
+	}
+	names := make([]string, 0, len(roles)+1)
+	names = append(names, "user") // baseline role always present
+	for _, r := range roles {
+		if r.Name != "user" {
+			names = append(names, r.Name)
+		}
+	}
+	if len(names) > 20 {
+		slog.Warn("user has more than 20 roles — JWT payload may be large",
+			"user_id", userID, "role_count", len(names))
+	}
+	return names
 }
 
 func timePtr(t time.Time) *time.Time { return &t }

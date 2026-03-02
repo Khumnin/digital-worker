@@ -107,7 +107,7 @@ func run() error {
 	}
 
 	authSvc := service.NewAuthService(
-		userRepo, sessionRepo, tokenRepo, auditRepo, tenantRepo,
+		userRepo, sessionRepo, tokenRepo, auditRepo, tenantRepo, roleRepo,
 		keyStore, emailChannel, authSvcCfg,
 	)
 	emailVerificationSvc := service.NewEmailVerificationService(
@@ -142,6 +142,7 @@ func run() error {
 		RoleHandler:      handler.NewRoleHandler(rbacSvc),
 		AuditHandler:     handler.NewAuditHandler(auditSvc),
 		WellKnownHandler: handler.NewWellKnownHandler(jwtSvc),
+		OAuthHandler:     handler.NewOAuthHandler(keyStore),
 		JWTKeyStore:      keyStore,
 		TenantCache:      tenantCache,
 		RateLimiter:      rateLimiter,
