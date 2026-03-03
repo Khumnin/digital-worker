@@ -5,7 +5,7 @@
       "Bash(node:*)",
       "Bash(GOFLAGS=\"-mod=mod\" go get:*)",
       "Bash(go build:*)",
-      "Bash(\"/c/Users/khumn/gemini project/auth-system/backend/pkg/jwtutil/jwt_test.go\":*)",
+      "Bash(go test:*)",
       "Bash(python3:*)",
       "Bash(where:*)"
     ]

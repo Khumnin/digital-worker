@@ -1,0 +1,48 @@
+# ── Go ────────────────────────────────────────────────────────────────────────
+# Compiled binaries (no extension on Linux/Mac, .exe on Windows)
+auth-system/backend/migrate
+auth-system/backend/seed-super-admin
+auth-system/backend/*.exe
+auth-system/backend/tmp/
+
+# Go test & build cache
+*.test
+*.out
+
+# ── Node / JavaScript ────────────────────────────────────────────────────────
+node_modules/
+auth-system/tests/node_modules/
+dist/
+.next/
+.nuxt/
+
+# ── Environment & secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# ── OS generated ──────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# ── IDE & editor ──────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.tmp
+test.tmp
+coverage/

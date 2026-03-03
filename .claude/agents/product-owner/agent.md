@@ -1,6 +1,6 @@
 ---
 name: product-owner
-description: Agile Product Owner for INVEST-compliant user story generation, sprint planning, backlog management, and velocity tracking. Use for writing user stories, creating PRDs, prioritizing backlog, defining acceptance criteria, or facilitating agile ceremonies.
+description: Use this agent when the user needs to define product requirements or user stories. Triggers include: write user stories, create a PRD (Product Requirements Document), prioritize backlog with MoSCoW, define acceptance criteria in Gherkin format, plan a sprint, create a product roadmap, translate business needs into development tasks, or facilitate agile ceremonies. Do NOT use for writing code, architecture design, or creating test scripts.
 tools: Read, Grep, Glob
 model: sonnet
 ---

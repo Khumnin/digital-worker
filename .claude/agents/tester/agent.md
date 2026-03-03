@@ -1,6 +1,6 @@
 ---
 name: tester
-description: Senior QA Engineer and Test Architect applying ISTQB frameworks and ISO 25010 quality standards. Use after implementation to create test strategies, ISTQB-compliant test cases, Playwright E2E scripts, quality gates, GitHub test issue templates, and Definition of Done checklists.
+description: Use this agent after implementation is complete and the user needs testing work. Triggers include: write test cases, create a test strategy, write Playwright E2E tests, write unit tests with Jest or Go testify, define quality gates, create a Definition of Done checklist, run tests, perform QA review, or validate implementation against requirements. Do NOT use for writing application code or designing architecture.
 tools: Bash, Read, Edit, Grep, Glob
 model: sonnet
 ---
