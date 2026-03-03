@@ -59,6 +59,9 @@ type AuditRepository interface {
 	List(ctx context.Context, filter AuditFilter) ([]*AuditEvent, int, error)
 	MarkArchived(ctx context.Context, ids []uuid.UUID) error
 	ListForArchive(ctx context.Context, cutoff time.Time, limit int) ([]*AuditEvent, error)
+	// AnonymizeActor replaces all actor_id references to userID with tombstoneID.
+	// Used for GDPR erasure to decouple audit history from the deleted identity.
+	AnonymizeActor(ctx context.Context, userID uuid.UUID, tombstoneID uuid.UUID) error
 }
 
 // AuditFilter defines query parameters for listing audit log entries.
@@ -166,4 +169,7 @@ type AuthorizationCodeRepository interface {
 	Create(ctx context.Context, code *AuthorizationCode) error
 	FindByCodeHash(ctx context.Context, codeHash string) (*AuthorizationCode, error)
 	MarkUsed(ctx context.Context, codeHash string) error
+	// DeleteByUserID removes all authorization codes issued to the given user.
+	// Called on password change and GDPR erasure to invalidate outstanding codes.
+	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
 }

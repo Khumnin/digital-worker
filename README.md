@@ -271,6 +271,45 @@ digital-worker/
 
 **All unit tests remain green — 67/67 passed after Sprint 7 changes.**
 
+### Sprint 8 — Hardening and Compliance
+
+**Deliverables completed**
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| COMP-01 | GDPR right-to-erasure — self-service `DELETE /users/me` + admin erase; full 9-step PII wipe | ✅ |
+| Pentest | TOTP brute-force protection — Redis rate limit 5 attempts / 15 min; 429 on breach | ✅ |
+| OWASP | Request body size limit — 64 KB cap via `MaxBodySize` middleware | ✅ |
+| OWASP | Password change invalidates outstanding OAuth codes | ✅ |
+| OWASP | Generic 500 fallback — no internal detail leaks in error responses | ✅ |
+| PERF-04 | Performance indexes — 5 partial/compound indexes on hot query paths | ✅ |
+| AVAIL-04 | Dependency-aware health check — `GET /health` pings PostgreSQL + Redis; 503 on degraded | ✅ |
+
+**GDPR erasure sequence (irreversible)**
+1. Revoke all sessions
+2. Delete MFA backup codes
+3. Delete social account links (`oauth_social_accounts`)
+4. Delete outstanding OAuth authorization codes
+5. Anonymize user PII → tombstone values
+6. Soft-delete user record
+7. Anonymize audit log `actor_id` → nil UUID tombstone
+8. Write `USER_ERASED` audit event
+
+Self-service requires password confirmation. Admin erase requires `admin` role.
+
+**Security hardening applied**
+- `ErrTOTPRateLimited` → 429 on Login and MFA Confirm endpoints
+- `middleware.MaxBodySize(64KB)` applied globally before all routes
+- `codeRepo.DeleteByUserID` called on password change (OAuth codes invalidated)
+- Health check actively validates DB + Redis connectivity; returns 503 if degraded
+
+**New files added**
+- `internal/handler/health_handler.go` — dependency-aware health check
+- `internal/middleware/request_size.go` — 64 KB body size cap
+- `migrations/tenant/000015_performance_indexes` — 5 indexes (email, session hash, audit log, OAuth codes)
+
+**All unit tests remain green — 67/67 passed after Sprint 8 changes.**
+
 ### Overall: 91 tests · 0 failures
 
 ---

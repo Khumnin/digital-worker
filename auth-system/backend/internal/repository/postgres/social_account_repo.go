@@ -89,3 +89,17 @@ func (r *postgresSocialAccountRepo) UpdateTokens(ctx context.Context, id uuid.UU
 		return execErr
 	})
 }
+
+// DeleteByUserID removes all social account links for the given user.
+// Called during GDPR erasure to remove provider identity associations.
+func (r *postgresSocialAccountRepo) DeleteByUserID(ctx context.Context, userID uuid.UUID) error {
+	schema, err := pgdb.SchemaFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	return pgdb.WithTenantSchema(ctx, r.pool, schema, func(conn *pgx.Conn) error {
+		_, execErr := conn.Exec(ctx,
+			`DELETE FROM oauth_social_accounts WHERE user_id = $1`, userID)
+		return execErr
+	})
+}

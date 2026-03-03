@@ -116,6 +116,15 @@ func (h *MFAHandler) Confirm(c *gin.Context) {
 			))
 			return
 		}
+		if errors.Is(err, domain.ErrTOTPRateLimited) {
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, apierror.New(
+				"TOTP_RATE_LIMITED",
+				"Too many TOTP verification attempts. Please wait 15 minutes before trying again.",
+				nil,
+				getRequestID(c),
+			))
+			return
+		}
 		if errors.Is(err, domain.ErrInvalidTOTPCode) {
 			c.AbortWithStatusJSON(http.StatusUnprocessableEntity, apierror.New(
 				"INVALID_TOTP_CODE",

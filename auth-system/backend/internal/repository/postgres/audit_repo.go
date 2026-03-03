@@ -145,6 +145,22 @@ func (r *PostgresAuditRepo) MarkArchived(ctx context.Context, ids []uuid.UUID) e
 	})
 }
 
+// AnonymizeActor replaces all actor_id references matching userID with tombstoneID.
+// This is called as part of GDPR right-to-erasure processing.
+func (r *PostgresAuditRepo) AnonymizeActor(ctx context.Context, userID uuid.UUID, tombstoneID uuid.UUID) error {
+	schema, err := pgdb.SchemaFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	return pgdb.WithTenantSchema(ctx, r.pool, schema, func(conn *pgx.Conn) error {
+		_, execErr := conn.Exec(ctx,
+			`UPDATE audit_log SET actor_id = $2 WHERE actor_id = $1`,
+			userID, tombstoneID,
+		)
+		return execErr
+	})
+}
+
 func (r *PostgresAuditRepo) ListForArchive(ctx context.Context, cutoff time.Time, limit int) ([]*domain.AuditEvent, error) {
 	schema, err := pgdb.SchemaFromContext(ctx)
 	if err != nil {

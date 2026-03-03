@@ -45,4 +45,5 @@ var (
 	ErrMFARequired            = errors.New("MFA verification required")
 	ErrMFAEnrollmentRequired  = errors.New("MFA enrollment is required for this organization")
 	ErrBackupCodeInvalid      = errors.New("backup code is invalid or already used")
+	ErrTOTPRateLimited        = errors.New("too many TOTP verification attempts")
 )

@@ -106,6 +106,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			})
 			return
 		}
+		// 429: TOTP brute-force rate limit exceeded.
+		if errors.Is(err, domain.ErrTOTPRateLimited) {
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, apierror.New(
+				"TOTP_RATE_LIMITED",
+				"Too many TOTP verification attempts. Please wait 15 minutes before trying again.",
+				nil,
+				getRequestID(c),
+			))
+			return
+		}
 		respondWithServiceError(c, err)
 		return
 	}

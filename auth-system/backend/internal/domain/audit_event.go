@@ -47,4 +47,7 @@ const (
 
 	// Profile events
 	EventProfileUpdated        EventType = "PROFILE_UPDATED"
+
+	// GDPR events
+	EventUserErased            EventType = "USER_ERASED"
 )

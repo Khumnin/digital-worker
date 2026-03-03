@@ -37,6 +37,10 @@ type SocialAccountRepository interface {
 
 	// UpdateTokens refreshes the stored access/refresh tokens and expiry for an account.
 	UpdateTokens(ctx context.Context, id uuid.UUID, accessToken, refreshToken string, expiresAt *time.Time) error
+
+	// DeleteByUserID removes all social account links for the given user.
+	// Called during GDPR erasure to remove provider identity associations.
+	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
 }
 
 // Social account domain errors.

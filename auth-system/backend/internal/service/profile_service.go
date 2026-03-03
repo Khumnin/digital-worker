@@ -22,12 +22,17 @@ type ProfileService interface {
 	UpdateProfile(ctx context.Context, input UpdateProfileInput) (*ProfileResult, error)
 
 	// ChangePassword verifies the current password, validates the new one against
-	// the tenant policy, updates the hash, and revokes all active sessions.
+	// the tenant policy, updates the hash, and revokes all active sessions and
+	// outstanding OAuth authorization codes.
 	ChangePassword(ctx context.Context, input ChangePasswordInput) error
 
 	// RequestEmailChange validates the new address and queues a verification
 	// email to the new address before any change is applied.
 	RequestEmailChange(ctx context.Context, input EmailChangeInput) error
+
+	// EraseOwnAccount performs a full GDPR self-erasure after verifying the
+	// user's current password. This action is irreversible.
+	EraseOwnAccount(ctx context.Context, userID uuid.UUID, password string) error
 }
 
 // ProfileResult is the public-facing representation of a user's profile.
@@ -62,28 +67,41 @@ type EmailChangeInput struct {
 	TenantID string
 }
 
+// gdprProfileTombstoneUUID is the nil UUID tombstone for GDPR audit anonymization.
+// Reuses the same value as adminServiceImpl for consistency.
+var gdprProfileTombstoneUUID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
+
 type profileServiceImpl struct {
-	userRepo    domain.UserRepository
-	sessionRepo domain.SessionRepository
-	auditRepo   domain.AuditRepository
-	emailCh     chan<- EmailTask
-	tokenTTL    time.Duration
+	userRepo          domain.UserRepository
+	sessionRepo       domain.SessionRepository
+	mfaRepo           domain.MFARepository
+	socialAccountRepo domain.SocialAccountRepository
+	codeRepo          domain.AuthorizationCodeRepository
+	auditRepo         domain.AuditRepository
+	emailCh           chan<- EmailTask
+	tokenTTL          time.Duration
 }
 
 // NewProfileService constructs a ProfileService with all dependencies injected.
 func NewProfileService(
 	userRepo domain.UserRepository,
 	sessionRepo domain.SessionRepository,
+	mfaRepo domain.MFARepository,
+	socialAccountRepo domain.SocialAccountRepository,
+	codeRepo domain.AuthorizationCodeRepository,
 	auditRepo domain.AuditRepository,
 	emailCh chan<- EmailTask,
 	tokenTTL time.Duration,
 ) ProfileService {
 	return &profileServiceImpl{
-		userRepo:    userRepo,
-		sessionRepo: sessionRepo,
-		auditRepo:   auditRepo,
-		emailCh:     emailCh,
-		tokenTTL:    tokenTTL,
+		userRepo:          userRepo,
+		sessionRepo:       sessionRepo,
+		mfaRepo:           mfaRepo,
+		socialAccountRepo: socialAccountRepo,
+		codeRepo:          codeRepo,
+		auditRepo:         auditRepo,
+		emailCh:           emailCh,
+		tokenTTL:          tokenTTL,
 	}
 }
 
@@ -130,8 +148,8 @@ func (s *profileServiceImpl) UpdateProfile(ctx context.Context, input UpdateProf
 }
 
 // ChangePassword verifies the current password, validates the new password
-// against the tenant's policy, re-hashes, and revokes all existing sessions
-// (security: new password invalidates all prior sessions).
+// against the tenant's policy, re-hashes, revokes all existing sessions, and
+// invalidates any outstanding OAuth authorization codes issued to this user.
 func (s *profileServiceImpl) ChangePassword(ctx context.Context, input ChangePasswordInput) error {
 	user, err := s.userRepo.FindByID(ctx, input.UserID)
 	if err != nil {
@@ -142,9 +160,7 @@ func (s *profileServiceImpl) ChangePassword(ctx context.Context, input ChangePas
 		return domain.ErrInvalidCredentials
 	}
 
-	// Validate new password against the default policy. The tenant-specific
-	// policy is loaded by the auth service during login; here we apply the
-	// same default to keep the service independent of the tenant context.
+	// Validate new password against the default policy.
 	defaultPolicy := domain.DefaultTenantConfig().PasswordPolicy
 	if err := validator.CheckPasswordPolicy(input.NewPassword, defaultPolicy); err != nil {
 		return err
@@ -171,6 +187,13 @@ func (s *profileServiceImpl) ChangePassword(ctx context.Context, input ChangePas
 			"user_id", input.UserID, "count", revokedCount)
 	}
 
+	// Invalidate outstanding OAuth authorization codes — a changed password
+	// means the user's prior authorization grants should not be exchangeable.
+	if err := s.codeRepo.DeleteByUserID(ctx, input.UserID); err != nil {
+		slog.Error("failed to delete OAuth codes after password change",
+			"user_id", input.UserID, "error", err)
+	}
+
 	s.writeAudit(ctx, domain.AuditEvent{
 		EventType:    domain.EventPasswordChanged,
 		ActorID:      &input.UserID,
@@ -183,8 +206,7 @@ func (s *profileServiceImpl) ChangePassword(ctx context.Context, input ChangePas
 
 // RequestEmailChange validates the new email address and sends a verification
 // email to it. The actual email update does NOT happen here; it is applied only
-// after the user clicks the verification link (handled by the email verification
-// flow).
+// after the user clicks the verification link.
 func (s *profileServiceImpl) RequestEmailChange(ctx context.Context, input EmailChangeInput) error {
 	newEmail, err := domain.NormalizeEmail(input.NewEmail)
 	if err != nil {
@@ -194,7 +216,6 @@ func (s *profileServiceImpl) RequestEmailChange(ctx context.Context, input Email
 	// Verify the new email is not already taken in this tenant.
 	_, lookupErr := s.userRepo.FindByEmail(ctx, newEmail)
 	if lookupErr == nil {
-		// A user with that email already exists.
 		return domain.ErrEmailAlreadyExists
 	}
 
@@ -203,7 +224,6 @@ func (s *profileServiceImpl) RequestEmailChange(ctx context.Context, input Email
 		return fmt.Errorf("find user for email change: %w", err)
 	}
 
-	// Queue the verification email to the new address.
 	s.enqueueEmail(EmailTask{
 		Type:      EmailTypeVerification,
 		ToEmail:   newEmail,
@@ -212,6 +232,68 @@ func (s *profileServiceImpl) RequestEmailChange(ctx context.Context, input Email
 		Extra: map[string]interface{}{
 			"old_email": user.Email,
 			"new_email": newEmail,
+		},
+	})
+
+	return nil
+}
+
+// EraseOwnAccount performs a full GDPR self-erasure after the user confirms
+// their current password. Steps mirror AdminService.EraseUser but are initiated
+// by the account owner. This operation is irreversible.
+func (s *profileServiceImpl) EraseOwnAccount(ctx context.Context, userID uuid.UUID, password string) error {
+	// 1. Fetch user and verify password — confirmation gate for irreversible action.
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("find user for self-erasure: %w", err)
+	}
+
+	if !crypto.VerifyPassword(password, user.PasswordHash) {
+		return domain.ErrInvalidCredentials
+	}
+
+	// 2. Revoke all active sessions.
+	if _, err := s.sessionRepo.RevokeAllForUser(ctx, userID); err != nil {
+		slog.Error("self-erasure: failed to revoke sessions", "user_id", userID, "error", err)
+	}
+
+	// 3. Delete MFA backup codes.
+	if err := s.mfaRepo.DeleteAllForUser(ctx, userID); err != nil {
+		slog.Error("self-erasure: failed to delete MFA backup codes", "user_id", userID, "error", err)
+	}
+
+	// 4. Delete social account links.
+	if err := s.socialAccountRepo.DeleteByUserID(ctx, userID); err != nil {
+		slog.Error("self-erasure: failed to delete social accounts", "user_id", userID, "error", err)
+	}
+
+	// 5. Delete outstanding OAuth authorization codes.
+	if err := s.codeRepo.DeleteByUserID(ctx, userID); err != nil {
+		slog.Error("self-erasure: failed to delete OAuth codes", "user_id", userID, "error", err)
+	}
+
+	// 6. Anonymize PII in user record.
+	if err := s.userRepo.AnonymizePII(ctx, userID); err != nil {
+		return fmt.Errorf("anonymize user PII: %w", err)
+	}
+
+	// 7. Soft-delete the user record.
+	if err := s.userRepo.SoftDelete(ctx, userID); err != nil {
+		return fmt.Errorf("soft delete user: %w", err)
+	}
+
+	// 8. Anonymize actor references in audit log.
+	if err := s.auditRepo.AnonymizeActor(ctx, userID, gdprProfileTombstoneUUID); err != nil {
+		slog.Error("self-erasure: failed to anonymize audit log actor", "user_id", userID, "error", err)
+	}
+
+	// 9. Write the erasure audit event.
+	s.writeAudit(ctx, domain.AuditEvent{
+		EventType:    domain.EventUserErased,
+		TargetUserID: &userID,
+		Metadata: map[string]interface{}{
+			"erased":         true,
+			"self_requested": true,
 		},
 	})
 

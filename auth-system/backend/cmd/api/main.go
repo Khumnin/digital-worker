@@ -88,6 +88,7 @@ func run() error {
 
 	slog.Info("email worker started", "workers", cfg.Email.WorkerConcurrency)
 
+	// -- Repositories ----------------------------------------------------------
 	userRepo := pgRepo.NewPostgresUserRepo(pool)
 	sessionRepo := pgRepo.NewPostgresSessionRepo(pool)
 	tokenRepo := pgRepo.NewPostgresTokenRepo(pool)
@@ -98,13 +99,20 @@ func run() error {
 	oauthClientRepo := pgRepo.NewPostgresOAuthClientRepo(pool)
 	oauthCodeRepo := pgRepo.NewPostgresAuthCodeRepo(pool)
 	socialAccountRepo := pgRepo.NewPostgresSocialAccountRepo(pool)
-
-	rateLimiter := redisRepo.NewRedisRateLimiter(redisClient)
 	mfaRepo := pgRepo.NewPostgresMFARepo(pool)
 
-	mfaSvc := service.NewMFAService(userRepo, mfaRepo, auditRepo, cfg.JWT.Issuer)
+	rateLimiter := redisRepo.NewRedisRateLimiter(redisClient)
+
+	// -- Services --------------------------------------------------------------
+
+	// MFAService now requires a RateLimiter for TOTP brute-force protection.
+	mfaSvc := service.NewMFAService(userRepo, mfaRepo, auditRepo, rateLimiter, cfg.JWT.Issuer)
+
+	// ProfileService now requires mfaRepo, socialAccountRepo, and codeRepo for
+	// GDPR self-erasure and OAuth code invalidation on password change.
 	profileSvc := service.NewProfileService(
-		userRepo, sessionRepo, auditRepo, emailChannel, cfg.Email.VerificationTokenTTL,
+		userRepo, sessionRepo, mfaRepo, socialAccountRepo, oauthCodeRepo,
+		auditRepo, emailChannel, cfg.Email.VerificationTokenTTL,
 	)
 
 	authSvcCfg := service.AuthServiceConfig{
@@ -133,7 +141,15 @@ func run() error {
 		"file://migrations/tenant", emailChannel,
 	)
 	rbacSvc := service.NewRBACService(roleRepo, userRepo, auditRepo)
-	adminSvc := service.NewAdminService(userRepo, sessionRepo, roleRepo, auditRepo, emailChannel)
+
+	// AdminService now requires mfaRepo, socialAccountRepo, and codeRepo to
+	// perform full GDPR erasure (EraseUser) instead of simple soft-delete.
+	adminSvc := service.NewAdminService(
+		userRepo, sessionRepo, roleRepo, auditRepo,
+		mfaRepo, socialAccountRepo, oauthCodeRepo, emailChannel,
+	)
+	adminSvc = service.WithTokenRepo(adminSvc, tokenRepo)
+
 	auditSvc := service.NewAuditService(auditRepo)
 	jwtSvc := service.NewJWTService(keyStore)
 	oauthSvc := service.NewOAuthService(
@@ -149,6 +165,7 @@ func run() error {
 
 	tenantCache := middleware.NewInMemoryTenantCache(tenantRepo, cfg.Tenant.CacheTTL)
 
+	// -- Handlers --------------------------------------------------------------
 	deps := router.Dependencies{
 		Config:           cfg,
 		AuthHandler:      handler.NewAuthHandler(authSvc),
@@ -164,9 +181,11 @@ func run() error {
 		WellKnownHandler: handler.NewWellKnownHandler(jwtSvc),
 		OAuthHandler:     handler.NewOAuthHandler(keyStore, oauthSvc),
 		GoogleHandler:    handler.NewGoogleHandler(googleSvc, tenantSvc),
-		JWTKeyStore:      keyStore,
-		TenantCache:      tenantCache,
-		RateLimiter:      rateLimiter,
+		// Sprint 8: dependency-aware health check.
+		HealthHandler: handler.NewHealthHandler(pool, redisClient),
+		JWTKeyStore:   keyStore,
+		TenantCache:   tenantCache,
+		RateLimiter:   rateLimiter,
 	}
 
 	ginRouter := router.New(deps)

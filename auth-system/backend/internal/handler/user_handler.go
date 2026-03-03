@@ -43,6 +43,12 @@ type updateMeRequest struct {
 	NewEmail *string `json:"new_email"`
 }
 
+// deleteMeRequest carries the user's current password as confirmation of intent.
+// Password verification is mandatory — GDPR self-erasure is irreversible.
+type deleteMeRequest struct {
+	Password string `json:"password" validate:"required"`
+}
+
 // GetMe handles GET /api/v1/users/me.
 // Returns the user's full profile by fetching from the database using the JWT
 // subject claim.
@@ -210,4 +216,54 @@ func (h *UserHandler) UpdateMe(c *gin.Context) {
 		nil,
 		getRequestID(c),
 	))
+}
+
+// DeleteMe handles DELETE /api/v1/users/me — GDPR self-erasure.
+// The user must supply their current password to confirm the irreversible action.
+// On success returns 204 No Content. The access token becomes invalid immediately
+// since all sessions are revoked during erasure.
+func (h *UserHandler) DeleteMe(c *gin.Context) {
+	claimsVal, exists := c.Get("jwt_claims")
+	if !exists {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, apierror.New(
+			"UNAUTHORIZED", "Authentication required.", nil, getRequestID(c),
+		))
+		return
+	}
+	claims := claimsVal.(middleware.JWTClaims)
+
+	userID, err := uuid.Parse(claims.UserID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, apierror.New(
+			"INVALID_USER_ID", "User ID in token is not a valid UUID.", nil, getRequestID(c),
+		))
+		return
+	}
+
+	var req deleteMeRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+
+	if err := h.profileSvc.EraseOwnAccount(c.Request.Context(), userID, req.Password); err != nil {
+		if errors.Is(err, domain.ErrInvalidCredentials) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, apierror.New(
+				"INVALID_CREDENTIALS",
+				"The password provided is incorrect. Account erasure requires your current password.",
+				nil,
+				getRequestID(c),
+			))
+			return
+		}
+		if errors.Is(err, domain.ErrUserNotFound) {
+			c.AbortWithStatusJSON(http.StatusNotFound, apierror.New(
+				"USER_NOT_FOUND", "User account not found.", nil, getRequestID(c),
+			))
+			return
+		}
+		respondWithServiceError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
