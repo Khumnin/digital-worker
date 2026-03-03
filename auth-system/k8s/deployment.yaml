@@ -29,7 +29,7 @@ spec:
         - name: migrate
           image: REGISTRY_PLACEHOLDER/tigersoft-auth:latest
           imagePullPolicy: Always
-          command: ["/migrate", "-scope=global", "-direction=up"]
+          command: ["/migrate", "-scope=global", "-direction=up", "-seed-platform=true"]
           envFrom:
             - configMapRef:
                 name: auth-api-config

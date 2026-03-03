@@ -59,7 +59,7 @@ func (p *TenantProvisioner) Provision(ctx context.Context, schemaName string) er
 		tenantMigrPath: p.tenantMigrPath,
 	}
 
-	if err := runner.migrateTenantSchema(schemaName, "up", 0); err != nil {
+	if err := runner.migrateTenantSchema(ctx, schemaName, "up", 0); err != nil {
 		return fmt.Errorf("migrate new tenant schema %q: %w", schemaName, err)
 	}
 
