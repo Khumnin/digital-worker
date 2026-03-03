@@ -42,6 +42,9 @@ ehthumbs.db
 *.log
 logs/
 
+# ── Claude AI worktrees (local only, never commit) ────────────────────────────
+.claude/worktrees/
+
 # ── Misc ──────────────────────────────────────────────────────────────────────
 *.tmp
 test.tmp
