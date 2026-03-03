@@ -3,6 +3,9 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -64,22 +67,24 @@ func run() error {
 	}
 	defer redisClient.Close()
 
-	vaultClient, err := vault.NewClient(cfg.Vault)
+	// -- Signing key: Vault (dev/self-hosted) or env var (Fly Secrets / CI) ---
+	signingKey, kid, err := resolveSigningKey(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("connect to vault: %w", err)
-	}
-
-	signingKey, kid, err := vaultClient.LoadCurrentSigningKey(ctx)
-	if err != nil {
-		return fmt.Errorf("load signing key from vault: %w", err)
+		return fmt.Errorf("resolve signing key: %w", err)
 	}
 
 	keyStore := jwtutil.NewKeyStore(cfg.JWT.Issuer, cfg.JWT.Audience, kid, signingKey)
 
-	keyRotationWatcher := vault.NewKeyRotationWatcher(vaultClient, keyStore, cfg.Vault.KeyRotationPollInterval)
-	go keyRotationWatcher.Watch(ctx)
-
-	slog.Info("connected to vault", "kid", kid)
+	// Key rotation watcher only runs when Vault is configured.
+	if cfg.Vault.Addr != "" {
+		vaultClient, err := vault.NewClient(cfg.Vault)
+		if err != nil {
+			return fmt.Errorf("connect to vault for rotation watcher: %w", err)
+		}
+		keyRotationWatcher := vault.NewKeyRotationWatcher(vaultClient, keyStore, cfg.Vault.KeyRotationPollInterval)
+		go keyRotationWatcher.Watch(ctx)
+		slog.Info("vault key rotation watcher started")
+	}
 
 	emailChannel := make(chan service.EmailTask, cfg.Email.ChannelBufferSize)
 	emailClient := emailinfra.NewClient(cfg.Email)
@@ -233,4 +238,74 @@ func run() error {
 
 	slog.Info("server shutdown complete")
 	return nil
+}
+
+// resolveSigningKey loads the RSA signing key from Vault (when VAULT_ADDR is set)
+// or from environment variables (JWT_PRIVATE_KEY_PATH or JWT_RSA_PRIVATE_KEY_PEM)
+// for deployments that do not use HashiCorp Vault (e.g. Fly.io with Fly Secrets).
+func resolveSigningKey(ctx context.Context, cfg *config.Config) (*rsa.PrivateKey, string, error) {
+	if cfg.Vault.Addr != "" {
+		vaultClient, err := vault.NewClient(cfg.Vault)
+		if err != nil {
+			return nil, "", fmt.Errorf("connect to vault: %w", err)
+		}
+		key, kid, err := vaultClient.LoadCurrentSigningKey(ctx)
+		if err != nil {
+			return nil, "", err
+		}
+		slog.Info("loaded signing key from vault", "kid", kid)
+		return key, kid, nil
+	}
+
+	// Fly Secrets / env-var mode — no Vault dependency.
+	// Priority 1: file path (existing dev behaviour, unchanged).
+	if path := os.Getenv("JWT_PRIVATE_KEY_PATH"); path != "" {
+		pemBytes, err := os.ReadFile(path)
+		if err != nil {
+			return nil, "", fmt.Errorf("read JWT key file: %w", err)
+		}
+		key, err := parseRSAPrivateKey(pemBytes)
+		if err != nil {
+			return nil, "", fmt.Errorf("parse JWT key file: %w", err)
+		}
+		kid := os.Getenv("JWT_KEY_ID")
+		if kid == "" {
+			kid = "key-dev-local"
+		}
+		slog.Info("loaded signing key from file", "kid", kid)
+		return key, kid, nil
+	}
+
+	// Priority 2: PEM content stored directly as env var (Fly Secrets).
+	pemContent := os.Getenv("JWT_RSA_PRIVATE_KEY_PEM")
+	if pemContent == "" {
+		return nil, "", fmt.Errorf(
+			"no JWT signing key configured: set VAULT_ADDR, JWT_PRIVATE_KEY_PATH, or JWT_RSA_PRIVATE_KEY_PEM",
+		)
+	}
+	key, err := parseRSAPrivateKey([]byte(pemContent))
+	if err != nil {
+		return nil, "", fmt.Errorf("parse JWT_RSA_PRIVATE_KEY_PEM: %w", err)
+	}
+	kid := os.Getenv("JWT_KEY_ID")
+	if kid == "" {
+		kid = "key-prod-1"
+	}
+	slog.Info("loaded signing key from environment", "kid", kid)
+	return key, kid, nil
+}
+
+// parseRSAPrivateKey decodes a PEM block and parses an RSA private key (PKCS8 or PKCS1).
+func parseRSAPrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode PEM block")
+	}
+	if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
+		if rsaKey, ok := key.(*rsa.PrivateKey); ok {
+			return rsaKey, nil
+		}
+		return nil, fmt.Errorf("PKCS8 key is not RSA")
+	}
+	return x509.ParsePKCS1PrivateKey(block.Bytes)
 }
