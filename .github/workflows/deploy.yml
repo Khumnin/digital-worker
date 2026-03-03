@@ -1,0 +1,79 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "auth-system/backend/**"
+      - "auth-system/k8s/**"
+      - ".github/workflows/deploy.yml"
+
+jobs:
+  deploy:
+    name: Build → ECR → EKS
+    runs-on: ubuntu-latest
+    concurrency: deploy-production
+    permissions:
+      id-token: write   # required for AWS OIDC
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: auth-system/backend/go.sum
+
+      - name: Build & Test (gate)
+        working-directory: auth-system/backend
+        run: |
+          go build ./...
+          go test ./... -timeout 60s
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-southeast-7
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        id: build
+        env:
+          IMAGE: ${{ secrets.ECR_REGISTRY }}/tigersoft-auth:${{ github.sha }}
+        run: |
+          docker build -t "$IMAGE" ./auth-system/backend
+          docker push "$IMAGE"
+          # Also tag as latest for readability
+          docker tag "$IMAGE" ${{ secrets.ECR_REGISTRY }}/tigersoft-auth:latest
+          docker push ${{ secrets.ECR_REGISTRY }}/tigersoft-auth:latest
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Update kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig \
+            --region ap-southeast-7 \
+            --name ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: Deploy to EKS
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+        run: |
+          kubectl set image deployment/auth-api \
+            auth-api="$IMAGE" \
+            migrate="$IMAGE" \
+            -n henderson
+          kubectl rollout status deployment/auth-api -n henderson --timeout=300s
+
+      - name: Verify health
+        run: |
+          kubectl run health-check --rm -i --restart=Never \
+            --image=curlimages/curl:latest \
+            --namespace=henderson \
+            -- curl -sf http://auth-system:8080/health

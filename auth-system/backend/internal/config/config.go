@@ -144,7 +144,7 @@ func Load() (*Config, error) {
 			PoolSize:     mustGetEnvInt("REDIS_POOL_SIZE", 20),
 		},
 		Vault: VaultConfig{
-			Addr:                    mustGetEnv("VAULT_ADDR"),
+			Addr:                    os.Getenv("VAULT_ADDR"),
 			Token:                   os.Getenv("VAULT_TOKEN"),
 			RoleID:                  os.Getenv("VAULT_ROLE_ID"),
 			SecretID:                os.Getenv("VAULT_SECRET_ID"),
