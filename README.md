@@ -310,7 +310,36 @@ Self-service requires password confirmation. Admin erase requires `admin` role.
 
 **All unit tests remain green — 67/67 passed after Sprint 8 changes.**
 
-### Overall: 91 tests · 0 failures
+### Sprint 9 — Launch Preparation and UAT
+
+**Deliverables completed**
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| E2E regression | Playwright API test suites for all Sprints 4-8 flows | ✅ |
+| Smoke tests | `00-smoke.spec.ts` — full happy-path skeleton for go/no-go gate | ✅ |
+| Incident runbook | `docs/runbook.md` — SEV-1/2/3 playbooks + rollback procedure | ✅ |
+| Go/no-go checklist | `docs/go-no-go.md` — 13 critical + 8 important gates + sign-off table | ✅ |
+
+**New E2E test files (Playwright API project)**
+
+| File | Sprint | Tests |
+|------|--------|-------|
+| `00-smoke.spec.ts` | 9 | Full happy-path: health, register, login, JWKS, introspect, headers |
+| `04-rbac.spec.ts` | 4 | Admin role gates, token introspection RFC 7662, JWKS RFC 7517 |
+| `05-oauth-pkce.spec.ts` | 5 | Client registration ACL, PKCE S256, code reuse, plain method rejection |
+| `06-m2m.spec.ts` | 6 | Client credentials grant, no refresh_token in response, bad credentials |
+| `07-mfa.spec.ts` | 7 | MFA generate/confirm auth gates, profile CRUD, password change |
+| `09-gdpr.spec.ts` | 8 | Self-erasure auth + wrong password, health check postgres+redis |
+
+**New documentation**
+- `docs/runbook.md` — SEV-1 (service down), SEV-2 (Redis/Vault/email degraded), SEV-3 (perf), rollback commands
+- `docs/go-no-go.md` — launch gate checklist; 13 Critical blockers + sign-off table
+
+**Go/no-go Critical gates**
+`go build` · 67 unit tests · Playwright E2E · `/health` 200 in prod · zero Critical/High pentest findings · GDPR erasure verified · Vault-sourced JWT keys · all migrations applied · rate limiting active · secure headers · cross-tenant isolation · audit log writing
+
+### Overall: 67 unit tests · 0 failures · 6 E2E suites ready for live environment
 
 ---
 
