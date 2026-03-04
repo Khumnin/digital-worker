@@ -61,6 +61,19 @@ func (h *AdminHandler) InviteUser(c *gin.Context) {
 	})
 }
 
+// ResendInvite handles POST /api/v1/admin/users/:id/resend-invite.
+// Re-sends the invitation email for a user that has not yet accepted their invite.
+func (h *AdminHandler) ResendInvite(c *gin.Context) {
+	userID := c.Param("id")
+
+	if err := h.adminSvc.ResendInvite(c.Request.Context(), userID); err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Invitation re-sent successfully."})
+}
+
 // DisableUser handles POST /api/v1/admin/users/:id/disable.
 // Prevents the user from logging in without permanently deleting their data.
 func (h *AdminHandler) DisableUser(c *gin.Context) {

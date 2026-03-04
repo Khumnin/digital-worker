@@ -306,6 +306,12 @@ export const userApi = {
       method: "POST",
       token,
     }),
+
+  resendInvite: (id: string, token: string) =>
+    apiFetch<{ message: string }>(`/api/v1/admin/users/${id}/resend-invite`, {
+      method: "POST",
+      token,
+    }),
 };
 
 // ── Role admin endpoints ──────────────────────────────────────────────────────

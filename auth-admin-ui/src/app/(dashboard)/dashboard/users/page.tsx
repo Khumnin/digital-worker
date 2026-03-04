@@ -134,6 +134,17 @@ export default function UsersPage() {
     }
   }
 
+  async function handleResendInvite(id: string) {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await userApi.resendInvite(id, token);
+      toast.success("Invitation re-sent successfully");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to resend invitation");
+    }
+  }
+
   function clearFilters() {
     setStatusFilter("all");
     setModuleFilter("all");
@@ -322,12 +333,21 @@ export default function UsersPage() {
                         >
                           View details
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => handleSuspend(user.id)}
-                        >
-                          Suspend
-                        </DropdownMenuItem>
+                        {user.status === "pending" && (
+                          <DropdownMenuItem
+                            onClick={() => handleResendInvite(user.id)}
+                          >
+                            Resend Invite
+                          </DropdownMenuItem>
+                        )}
+                        {user.status === "active" && (
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => handleSuspend(user.id)}
+                          >
+                            Suspend
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

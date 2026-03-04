@@ -29,6 +29,10 @@ type UserWithRoles struct {
 // tenant administrators.
 type AdminService interface {
 	InviteUser(ctx context.Context, email, firstName, lastName string) (*domain.User, error)
+	// ResendInvite re-sends the invitation email for an unverified user.
+	// Only works when the user status is unverified; returns ErrUserNotFound
+	// or a descriptive error for any other state.
+	ResendInvite(ctx context.Context, userID string) error
 	DisableUser(ctx context.Context, userID string) error
 	EnableUser(ctx context.Context, userID string) error
 	// DeleteUser is kept for backward compatibility. It now delegates to EraseUser,
@@ -180,6 +184,57 @@ func (s *adminServiceImpl) InviteUser(ctx context.Context, email, firstName, las
 	})
 
 	return user, nil
+}
+
+// ResendInvite generates a fresh invitation token for an unverified user and
+// re-sends the invitation email. Returns an error if the user does not exist
+// or is not in an invitable state (unverified).
+func (s *adminServiceImpl) ResendInvite(ctx context.Context, userID string) error {
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	user, err := s.userRepo.FindByID(ctx, parsedID)
+	if err != nil {
+		return fmt.Errorf("find user for resend invite: %w", err)
+	}
+
+	if user.Status != domain.UserStatusUnverified {
+		return fmt.Errorf("user is not in a pending state (current status: %s)", user.Status)
+	}
+
+	rawToken, tokenHash, err := crypto.GenerateTokenWithHash()
+	if err != nil {
+		return fmt.Errorf("generate invitation token: %w", err)
+	}
+
+	expiresAt := time.Now().Add(invitationTTL)
+
+	if s.tokenRepo != nil {
+		if storeErr := s.tokenRepo.CreateEmailVerificationToken(ctx, user.ID, tokenHash, expiresAt); storeErr != nil {
+			return fmt.Errorf("store invitation token: %w", storeErr)
+		}
+	}
+
+	s.enqueueEmail(EmailTask{
+		Type:      EmailTypeInvitation,
+		ToEmail:   user.Email,
+		ToName:    user.FullName(),
+		Token:     rawToken,
+		ExpiresAt: expiresAt,
+	})
+
+	s.writeAuditEvent(ctx, domain.AuditEvent{
+		EventType:    domain.EventUserInvited,
+		TargetUserID: &user.ID,
+		Metadata: map[string]interface{}{
+			"email":   user.Email,
+			"resent":  true,
+		},
+	})
+
+	return nil
 }
 
 // DisableUser sets a user's status to Disabled and revokes all active sessions.

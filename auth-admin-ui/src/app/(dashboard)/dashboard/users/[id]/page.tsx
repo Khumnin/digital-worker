@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Shield } from "lucide-react";
+import { ArrowLeft, Loader2, Shield, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,7 @@ export default function UserDetailPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingRoles, setSavingRoles] = useState(false);
+  const [resending, setResending] = useState(false);
 
   // Selected system role names (string set)
   const [selectedSystemRoles, setSelectedSystemRoles] = useState<string[]>([]);
@@ -124,6 +125,21 @@ export default function UserDetailPage() {
     }
   }
 
+  async function handleResendInvite() {
+    if (!user) return;
+    setResending(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await userApi.resendInvite(user.id, token);
+      toast.success("Invitation re-sent successfully");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to resend invitation");
+    } finally {
+      setResending(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -168,6 +184,22 @@ export default function UserDetailPage() {
           >
             {user.status}
           </span>
+          {user.status === "pending" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResendInvite}
+              disabled={resending}
+              className="rounded-[1000px] text-xs h-8 text-tiger-red border-tiger-red/30 hover:bg-tiger-red/5"
+            >
+              {resending ? (
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              ) : (
+                <Send size={12} className="mr-1.5" />
+              )}
+              Resend Invite
+            </Button>
+          )}
           {user.status === "active" && (
             <Button
               variant="outline"

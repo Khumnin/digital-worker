@@ -111,6 +111,7 @@ func New(deps Dependencies) *gin.Engine {
 	admin := v1.Group("/admin", authMW, tenantFromJWT(), adminRole)
 	{
 		admin.POST("/users/invite", deps.AdminHandler.InviteUser)
+		admin.POST("/users/:id/resend-invite", deps.AdminHandler.ResendInvite)
 		admin.GET("/users/:id", deps.AdminHandler.GetUser)
 		admin.POST("/users/:id/disable", deps.AdminHandler.DisableUser)
 		admin.POST("/users/:id/enable", deps.AdminHandler.EnableUser)
