@@ -52,13 +52,14 @@ export default function AuditPage() {
     load();
   }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function load() {
+  async function load(targetPage?: number) {
+    const currentPage = targetPage ?? page;
     setLoading(true);
     try {
       const token = await getToken();
       if (!token) return;
       const result = await auditApi.list(token, {
-        page,
+        page: currentPage,
         page_size: PAGE_SIZE,
         ...(actionFilter && actionFilter !== "all" ? { action: actionFilter } : {}),
         ...(fromDate ? { from: fromDate } : {}),
@@ -76,28 +77,28 @@ export default function AuditPage() {
   const handleApply = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    load();
+    load(1);
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const actionColors: Record<string, string> = {
-    USER_LOGIN: "text-green-600 bg-green-50",
-    USER_LOGOUT: "text-blue-600 bg-blue-50",
-    USER_INVITED: "text-purple-600 bg-purple-50",
-    USER_ENABLED: "text-teal-600 bg-teal-50",
-    USER_DISABLED: "text-orange-600 bg-orange-50",
-    ROLE_ASSIGNED: "text-teal-600 bg-teal-50",
-    TENANT_SUSPENDED: "text-tiger-red bg-red-50",
-    TENANT_ACTIVATED: "text-green-600 bg-green-50",
+    USER_LOGIN: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30",
+    USER_LOGOUT: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30",
+    USER_INVITED: "text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30",
+    USER_ENABLED: "text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30",
+    USER_DISABLED: "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30",
+    ROLE_ASSIGNED: "text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30",
+    TENANT_SUSPENDED: "text-tiger-red dark:text-red-400 bg-red-50 dark:bg-red-900/30",
+    TENANT_ACTIVATED: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30",
     // legacy lowercase keys for backward compat
-    login: "text-green-600 bg-green-50",
-    logout: "text-blue-600 bg-blue-50",
-    register: "text-purple-600 bg-purple-50",
-    "password.change": "text-orange-600 bg-orange-50",
-    "user.suspend": "text-tiger-red bg-red-50",
-    "tenant.create": "text-indigo-600 bg-indigo-50",
-    "role.assign": "text-teal-600 bg-teal-50",
+    login: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30",
+    logout: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30",
+    register: "text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30",
+    "password.change": "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30",
+    "user.suspend": "text-tiger-red dark:text-red-400 bg-red-50 dark:bg-red-900/30",
+    "tenant.create": "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30",
+    "role.assign": "text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30",
   };
 
   return (
@@ -111,7 +112,7 @@ export default function AuditPage() {
             value={actionFilter}
             onValueChange={(val) => setActionFilter(val)}
           >
-            <SelectTrigger className="h-10 rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] text-sm min-w-[190px]">
+            <SelectTrigger className="h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm min-w-[190px]">
               <SelectValue placeholder="All Actions" />
             </SelectTrigger>
             <SelectContent>
@@ -132,7 +133,7 @@ export default function AuditPage() {
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="h-10 rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] text-sm w-[148px]"
+              className="h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm w-[148px]"
             />
           </div>
           <div className="space-y-1">
@@ -141,7 +142,7 @@ export default function AuditPage() {
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              className="h-10 rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] text-sm w-[148px]"
+              className="h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm w-[148px]"
             />
           </div>
         </div>
@@ -156,7 +157,7 @@ export default function AuditPage() {
       </form>
 
       {/* Table */}
-      <div className="bg-white rounded-[10px] border border-border overflow-hidden">
+      <div className="bg-card rounded-[10px] border border-border overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="animate-spin text-tiger-red" size={24} />
@@ -169,7 +170,7 @@ export default function AuditPage() {
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#fafafa] hover:bg-[#fafafa]">
+              <TableRow className="bg-[#fafafa] dark:bg-[#1a2332] hover:bg-[#fafafa] dark:hover:bg-[#1a2332]">
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">
                   Time
                 </TableHead>
@@ -190,11 +191,25 @@ export default function AuditPage() {
             <TableBody>
               {logs.map((log) => {
                 const colorClass =
-                  actionColors[log.action] ?? "text-semi-black bg-[#f0f0f0]";
+                  actionColors[log.action] ?? "text-semi-black dark:text-gray-300 bg-[#f0f0f0] dark:bg-gray-700/40";
                 return (
-                  <TableRow key={log.id} className="hover:bg-[#fafafa]">
+                  <TableRow key={log.id} className="bg-white dark:bg-[#1E2533] hover:bg-[#fafafa] dark:hover:bg-[#1a2332]">
                     <TableCell className="text-xs text-semi-grey whitespace-nowrap">
-                      {new Date(log.created_at).toLocaleString("th-TH")}
+                      {(() => {
+                        const d = new Date(log.created_at);
+                        return isNaN(d.getTime())
+                          ? log.created_at || "—"
+                          : new Intl.DateTimeFormat("en-US", {
+                              year: "numeric",
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              second: "2-digit",
+                              hour12: false,
+                              timeZone: "Asia/Bangkok",
+                            }).format(d);
+                      })()}
                     </TableCell>
                     <TableCell>
                       <span
@@ -207,7 +222,7 @@ export default function AuditPage() {
                       {log.actor_email || log.actor_id || "—"}
                     </TableCell>
                     <TableCell className="text-xs text-semi-grey max-w-[160px] truncate">
-                      {log.target_id ? `${log.target_id.slice(0, 8)}…` : "—"}
+                      {log.target_email || (log.target_id ? `${log.target_id.slice(0, 8)}…` : "—")}
                     </TableCell>
                     <TableCell className="text-xs text-semi-grey font-mono">
                       {log.ip_address || "—"}

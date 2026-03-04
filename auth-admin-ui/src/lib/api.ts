@@ -97,13 +97,19 @@ export interface InviteUserRequest {
   initial_role?: string;
 }
 
+export interface InviteAdminRequest {
+  email: string;
+  display_name: string;
+}
+
 export interface AuditLog {
   id: string;
   action: string;
   actor_id: string;
-  actor_email: string;
+  actor_email?: string;
   ip_address: string;
   target_id: string | null;
+  target_email?: string;
   metadata: Record<string, unknown>;
   created_at: string;
 }
@@ -256,8 +262,12 @@ export const authApi = {
 // ── Tenant admin endpoints ────────────────────────────────────────────────────
 
 export const tenantApi = {
-  list: (token: string) =>
-    apiFetch<PaginatedResponse<Tenant>>("/api/v1/admin/tenants", { token }),
+  list: (token: string, params?: { page?: number; page_size?: number }) => {
+    const qs = params
+      ? "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString()
+      : "";
+    return apiFetch<PaginatedResponse<Tenant>>(`/api/v1/admin/tenants${qs}`, { token });
+  },
 
   get: (id: string, token: string) =>
     apiFetch<Tenant>(`/api/v1/admin/tenants/${id}`, { token }),
@@ -287,6 +297,22 @@ export const tenantApi = {
       method: "POST",
       token,
     }),
+
+  listUsers: (id: string, token: string) =>
+    apiFetch<PaginatedResponse<User>>(`/api/v1/admin/tenants/${id}/users`, { token }),
+
+  inviteAdmin: (id: string, data: InviteAdminRequest, token: string) =>
+    apiFetch<User>(`/api/v1/admin/tenants/${id}/invite-admin`, {
+      method: "POST",
+      body: data,
+      token,
+    }),
+
+  resendAdminInvite: (tenantId: string, userId: string, token: string) =>
+    apiFetch<{ message: string }>(
+      `/api/v1/admin/tenants/${tenantId}/users/${userId}/resend-invite`,
+      { method: "POST", token }
+    ),
 };
 
 // ── User admin endpoints ──────────────────────────────────────────────────────
@@ -355,10 +381,26 @@ export const roleApi = {
 
 // ── Audit log endpoints ───────────────────────────────────────────────────────
 
+// Converts a plain date string ("YYYY-MM-DD") to an ISO 8601 timestamp with
+// the Asia/Bangkok offset (+07:00). Pass `endOfDay: true` to get 23:59:59
+// instead of 00:00:00, so the `to` filter is inclusive of the full day.
+function toLocalIso(dateStr: string, endOfDay: boolean): string {
+  const time = endOfDay ? "23:59:59" : "00:00:00";
+  return `${dateStr}T${time}+07:00`;
+}
+
 export const auditApi = {
   list: (token: string, params?: { page?: number; page_size?: number; action?: string; actor_id?: string; from?: string; to?: string }) => {
-    const qs = params
-      ? "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString()
+    const { from, to, ...rest } = params ?? {};
+    const resolved: Record<string, string> = Object.fromEntries(
+      Object.entries(rest)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, String(v)])
+    );
+    if (from) resolved["from"] = toLocalIso(from, false);
+    if (to)   resolved["to"]   = toLocalIso(to,   true);
+    const qs = Object.keys(resolved).length > 0
+      ? "?" + new URLSearchParams(resolved).toString()
       : "";
     return apiFetch<PaginatedResponse<AuditLog>>(`/api/v1/admin/audit-log${qs}`, { token });
   },

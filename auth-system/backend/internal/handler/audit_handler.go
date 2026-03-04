@@ -4,6 +4,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,16 @@ import (
 	"tigersoft/auth-system/internal/domain"
 	"tigersoft/auth-system/internal/service"
 )
+
+// normalizeIP strips the IPv6-mapped IPv4 prefix (::ffff:) so that
+// addresses like "::ffff:192.168.1.1" are returned as "192.168.1.1".
+func normalizeIP(ip string) string {
+	const prefix = "::ffff:"
+	if strings.HasPrefix(ip, prefix) {
+		return ip[len(prefix):]
+	}
+	return ip
+}
 
 // AuditHandler handles audit log query endpoints.
 type AuditHandler struct {
@@ -53,38 +64,51 @@ func (h *AuditHandler) List(c *gin.Context) {
 	}
 
 	if aid := c.Query("actor_id"); aid != "" {
-		if id, err := uuid.Parse(aid); err == nil {
-			filter.ActorID = &id
+		id, err := uuid.Parse(aid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_PARAM", "message": "actor_id must be a valid UUID"}})
+			return
 		}
+		filter.ActorID = &id
 	}
 
 	// Accept "target_id" as the canonical name; fall back to legacy "target_user_id".
 	if tid := c.Query("target_id"); tid != "" {
-		if id, err := uuid.Parse(tid); err == nil {
-			filter.TargetUserID = &id
+		id, err := uuid.Parse(tid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_PARAM", "message": "target_id must be a valid UUID"}})
+			return
 		}
+		filter.TargetUserID = &id
 	} else if tid := c.Query("target_user_id"); tid != "" {
-		if id, err := uuid.Parse(tid); err == nil {
-			filter.TargetUserID = &id
+		id, err := uuid.Parse(tid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "INVALID_PARAM", "message": "target_user_id must be a valid UUID"}})
+			return
 		}
+		filter.TargetUserID = &id
 	}
 
-	// Parse date range — accept ISO date (YYYY-MM-DD) or RFC3339 timestamp.
+	// Parse date range — try RFC3339 first (carries timezone offset), fall back
+	// to plain ISO date (YYYY-MM-DD) which is interpreted as UTC midnight.
+	// Trying RFC3339 first ensures that a frontend sending e.g.
+	// "2025-03-05T00:00:00+07:00" is honoured correctly and not silently
+	// truncated to UTC, which would exclude early-morning local-time events.
 	if from := c.Query("from"); from != "" {
-		if t, err := time.Parse("2006-01-02", from); err == nil {
+		if t, err := time.Parse(time.RFC3339, from); err == nil {
 			filter.From = &t
-		} else if t, err := time.Parse(time.RFC3339, from); err == nil {
+		} else if t, err := time.Parse("2006-01-02", from); err == nil {
 			filter.From = &t
 		}
 	}
 
 	if to := c.Query("to"); to != "" {
-		if t, err := time.Parse("2006-01-02", to); err == nil {
+		if t, err := time.Parse(time.RFC3339, to); err == nil {
+			filter.To = &t
+		} else if t, err := time.Parse("2006-01-02", to); err == nil {
 			// End of the given date (inclusive): advance to start of next day.
 			endOfDay := t.Add(24*time.Hour - time.Nanosecond)
 			filter.To = &endOfDay
-		} else if t, err := time.Parse(time.RFC3339, to); err == nil {
-			filter.To = &t
 		}
 	}
 
@@ -99,7 +123,7 @@ func (h *AuditHandler) List(c *gin.Context) {
 		item := gin.H{
 			"id":         e.ID.String(),
 			"action":     string(e.EventType),
-			"ip_address": e.ActorIP,
+			"ip_address": normalizeIP(e.ActorIP),
 			"metadata":   e.Metadata,
 			"created_at": e.OccurredAt,
 		}
@@ -109,8 +133,14 @@ func (h *AuditHandler) List(c *gin.Context) {
 		if e.ActorID != nil {
 			item["actor_id"] = e.ActorID.String()
 		}
+		if e.ActorEmail != nil {
+			item["actor_email"] = *e.ActorEmail
+		}
 		if e.TargetUserID != nil {
 			item["target_id"] = e.TargetUserID.String()
+		}
+		if e.TargetEmail != nil {
+			item["target_email"] = *e.TargetEmail
 		}
 
 		items[i] = item

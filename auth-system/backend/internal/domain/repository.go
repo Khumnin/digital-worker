@@ -156,6 +156,10 @@ type AuditEvent struct {
 	Metadata      map[string]interface{}
 	OccurredAt    time.Time
 	Archived      bool
+
+	// Populated by List query via LEFT JOIN; nil for Append/Archive paths.
+	ActorEmail  *string
+	TargetEmail *string
 }
 
 // Role domain errors.
