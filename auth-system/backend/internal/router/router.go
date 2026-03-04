@@ -106,7 +106,7 @@ func New(deps Dependencies) *gin.Engine {
 		authed.DELETE("/users/me/mfa", deps.MFAHandler.Disable)
 	}
 
-	adminRole := middleware.RequireRole("admin")
+	adminRole := middleware.RequireRole("admin", "super_admin")
 	admin := v1.Group("/admin", authMW, tenantFromJWT(), adminRole)
 	{
 		admin.POST("/users/invite", deps.AdminHandler.InviteUser)
