@@ -306,13 +306,14 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 		sessionTTL = time.Duration(tenant.Config.SessionTTLSeconds) * time.Second
 	}
 
-	roleNames := s.resolveUserRoles(ctx, user.ID)
+	systemRoleNames, moduleRolesMap := s.resolveUserRoles(ctx, user.ID)
 
 	accessToken, err := s.jwtSvc.Sign(jwtutil.Claims{
-		Subject:  user.ID.String(),
-		TenantID: tenant.ID.String(),
-		Roles:    roleNames,
-		TTL:      s.cfg.AccessTokenTTL,
+		Subject:     user.ID.String(),
+		TenantID:    tenant.Slug,
+		Roles:       systemRoleNames,
+		ModuleRoles: moduleRolesMap,
+		TTL:         s.cfg.AccessTokenTTL,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("sign access token: %w", err)
@@ -421,28 +422,46 @@ func (s *authServiceImpl) writeAuditEvent(ctx context.Context, event domain.Audi
 }
 
 // resolveUserRoles fetches the user's assigned roles from the tenant schema and
-// returns their names as a string slice for inclusion in JWT claims (US-10).
-// Falls back to []string{"user"} on error so login is never blocked by an RBAC read failure.
+// splits them into system roles (module IS NULL) and module roles (module IS NOT NULL).
+// Falls back to (["user"], {}) on error so login is never blocked by an RBAC read failure.
 // Logs a warning if a user has more than 20 roles (JWT size concern per US-10 DoD).
-func (s *authServiceImpl) resolveUserRoles(ctx context.Context, userID uuid.UUID) []string {
+func (s *authServiceImpl) resolveUserRoles(ctx context.Context, userID uuid.UUID) ([]string, map[string][]string) {
 	roles, err := s.roleRepo.GetUserRoles(ctx, userID)
 	if err != nil {
 		slog.Warn("failed to fetch user roles for JWT; falling back to [user]",
 			"user_id", userID, "error", err)
-		return []string{"user"}
+		return []string{"user"}, map[string][]string{}
 	}
-	names := make([]string, 0, len(roles)+1)
-	names = append(names, "user") // baseline role always present
+
+	systemRoles := make([]string, 0)
+	// Always ensure "user" baseline role is present.
+	hasUser := false
 	for _, r := range roles {
-		if r.Name != "user" {
-			names = append(names, r.Name)
+		if r.Name == "user" {
+			hasUser = true
 		}
 	}
-	if len(names) > 20 {
-		slog.Warn("user has more than 20 roles — JWT payload may be large",
-			"user_id", userID, "role_count", len(names))
+	if !hasUser {
+		systemRoles = append(systemRoles, "user")
 	}
-	return names
+
+	moduleRoles := make(map[string][]string)
+
+	for _, r := range roles {
+		if r.Module == nil {
+			systemRoles = append(systemRoles, r.Name)
+		} else {
+			mod := *r.Module
+			moduleRoles[mod] = append(moduleRoles[mod], r.Name)
+		}
+	}
+
+	totalRoles := len(systemRoles) + len(moduleRoles)
+	if totalRoles > 20 {
+		slog.Warn("user has more than 20 roles — JWT payload may be large",
+			"user_id", userID, "role_count", totalRoles)
+	}
+	return systemRoles, moduleRoles
 }
 
 func timePtr(t time.Time) *time.Time { return &t }

@@ -81,9 +81,18 @@ type RoleRepository interface {
 	FindByName(ctx context.Context, name string) (*Role, error)
 	ListAll(ctx context.Context) ([]*Role, error)
 	Create(ctx context.Context, name, description string) (*Role, error)
+	// Delete removes a role by ID. The caller is responsible for ensuring
+	// the role is not a system role and is not assigned to any user before calling this.
+	Delete(ctx context.Context, id uuid.UUID) error
+	// IsAssignedToAnyUser returns true if the role is currently referenced
+	// by at least one row in the user_roles table.
+	IsAssignedToAnyUser(ctx context.Context, id uuid.UUID) (bool, error)
 	AssignToUser(ctx context.Context, userID, roleID, assignedBy uuid.UUID) error
 	UnassignFromUser(ctx context.Context, userID, roleID uuid.UUID) error
 	GetUserRoles(ctx context.Context, userID uuid.UUID) ([]*Role, error)
+	// ReplaceUserRoles atomically deletes all existing roles for the user and
+	// inserts the new set within a single transaction.
+	ReplaceUserRoles(ctx context.Context, userID uuid.UUID, roleIDs []uuid.UUID) error
 }
 
 // TokenRepository defines operations on password_reset_tokens and email_verification_tokens.
@@ -131,6 +140,7 @@ type Role struct {
 	ID          uuid.UUID
 	Name        string
 	Description string
+	Module      *string // nil for system roles; set for module-scoped roles (e.g. "recruit")
 	IsSystem    bool
 	CreatedAt   time.Time
 }
@@ -155,6 +165,7 @@ var (
 	ErrRoleAlreadyAssigned = errors.New("user already has this role")
 	ErrRoleNotAssigned     = errors.New("user does not have this role")
 	ErrSystemRole          = errors.New("cannot delete a system role")
+	ErrRoleInUse           = errors.New("cannot delete a role that is assigned to users")
 )
 
 // OAuthClientRepository defines data operations on the oauth_clients table (per-tenant schema).

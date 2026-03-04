@@ -63,6 +63,29 @@ All projects from this AI team are managed in the **AI Project** Space on ClickU
 
 ---
 
+## ClickUp Status Reference
+
+All tasks in ClickUp follow this status workflow. **Use these exact status names** when calling `clickup_update_task`.
+
+| Category | Status | When Used |
+|---|---|---|
+| Not started | `BACKLOG` | New tasks not yet started |
+| Active | `SCOPING` | Phase 1 — Requirements analysis |
+| Active | `IN DESIGN` | Phase 2 — Architecture design |
+| Active | `READY FOR DEVELOPMENT` | Phase 3 complete — task is groomed and ready |
+| Active | `IN DEVELOPMENT` | Phase 4 — Active coding |
+| Active | `IN REVIEW` | Phase 5 — Code review / QA handoff |
+| Active | `TESTING` | Phase 5 — QA testing in progress |
+| Done | `SHIPPED` | Phase 6 — PO accepted, deployed |
+| Closed | `CANCELLED` | Task cancelled |
+
+**Typical flow:**
+```
+BACKLOG → SCOPING → IN DESIGN → READY FOR DEVELOPMENT → IN DEVELOPMENT → IN REVIEW → TESTING → SHIPPED
+```
+
+---
+
 ## SDLC Workflow
 
 ### Phase 1 — Requirements Analysis (product-owner)
@@ -71,8 +94,12 @@ All projects from this AI team are managed in the **AI Project** Space on ClickU
 
 **Your action:**
 1. Accept input from the user (free text, uploaded document, Jira/ClickUp link, or external spec).
-2. Summarize the raw input and pass it to the `product-owner` agent.
-3. Instruct `product-owner` to produce:
+2. Update all related tasks in ClickUp to SCOPING:
+   ```
+   clickup_update_task → task_id: [id], status: "SCOPING"
+   ```
+3. Summarize the raw input and pass it to the `product-owner` agent.
+4. Instruct `product-owner` to produce:
    - Problem Statement
    - User Personas
    - User Stories (INVEST-compliant, Fibonacci story points)
@@ -92,8 +119,12 @@ All projects from this AI team are managed in the **AI Project** Space on ClickU
 **Trigger:** Phase 1 gate passed.
 
 **Your action:**
-1. Pass the approved user stories and NFRs to the `solution-architect` agent.
-2. Instruct `solution-architect` to produce:
+1. Update all related tasks in ClickUp to IN DESIGN:
+   ```
+   clickup_update_task → task_id: [id], status: "IN DESIGN"
+   ```
+2. Pass the approved user stories and NFRs to the `solution-architect` agent.
+3. Instruct `solution-architect` to produce:
    - C4 Context and Container diagrams (Mermaid)
    - Database Schema / ERD (Mermaid)
    - API Contract (endpoints, request/response, versioning)
@@ -143,11 +174,17 @@ All projects from this AI team are managed in the **AI Project** Space on ClickU
       ```
    d. Add a comment to each task with the handoff context from Phase 2 (architecture decisions, API contracts).
 
+4. After ClickUp tasks are created, update all sprint tasks to READY FOR DEVELOPMENT:
+      ```
+      clickup_update_task → task_id: [id], status: "READY FOR DEVELOPMENT"
+      ```
+
 **Gate before advancing to Phase 4:**
 - Every user story has at least one ClickUp task for Dev and one for QA.
 - All tasks visible in ClickUp AI Project space.
 - Sprint capacity does not exceed 80%.
 - User confirms sprint plan.
+- All sprint tasks are in `READY FOR DEVELOPMENT` status.
 
 ---
 
@@ -160,9 +197,9 @@ All projects from this AI team are managed in the **AI Project** Space on ClickU
    ```
    clickup_get_task → task_id: [task id from Phase 3]
    ```
-2. Update task status to "In Progress":
+2. Update task status to IN DEVELOPMENT:
    ```
-   clickup_update_task → task_id: [id], status: "in progress"
+   clickup_update_task → task_id: [id], status: "IN DEVELOPMENT"
    ```
 3. Delegate to the correct agent based on task tag (see routing table above), providing:
    - The ClickUp task title, description, and acceptance criteria
@@ -188,20 +225,24 @@ All projects from this AI team are managed in the **AI Project** Space on ClickU
 **Trigger:** Each development task completes Phase 4 gate.
 
 **Your action:**
-1. Update task status in ClickUp:
+1. Update task status in ClickUp to IN REVIEW:
    ```
-   clickup_update_task → task_id: [id], status: "review"
+   clickup_update_task → task_id: [id], status: "IN REVIEW"
    ```
-2. Delegate to the `tester` agent, providing:
+2. Once tester begins active testing, update status to TESTING:
+   ```
+   clickup_update_task → task_id: [id], status: "TESTING"
+   ```
+3. Delegate to the `tester` agent, providing:
    - User story acceptance criteria (Gherkin format)
    - API contracts and architecture docs
    - Definition of Done checklist from PM
-3. Instruct `tester` to produce:
+4. Instruct `tester` to produce:
    - ISTQB-compliant test cases for the story
    - Playwright E2E test scripts (if applicable)
    - Unit/integration test coverage report
    - QA sign-off report (pass/fail per acceptance criterion)
-4. After tester completes, post QA sign-off report as a ClickUp comment:
+5. After tester completes, post QA sign-off report as a ClickUp comment:
    ```
    clickup_create_task_comment → task_id: [id],
      comment_text: "🧪 QA Sign-off\nPass rate: [X]%\nDefects: [count]\n[summary of results]"
@@ -230,17 +271,17 @@ All projects from this AI team are managed in the **AI Project** Space on ClickU
 3. Based on PO verdict, update ClickUp:
    - **Accepted:**
      ```
-     clickup_update_task → task_id: [id], status: "done"
+     clickup_update_task → task_id: [id], status: "SHIPPED"
      clickup_create_task_comment → "✅ Accepted by PO. Story closed."
      ```
    - **Needs Revision:**
      ```
-     clickup_update_task → task_id: [id], status: "in progress"
+     clickup_update_task → task_id: [id], status: "IN DEVELOPMENT"
      clickup_create_task_comment → "🔁 Revision required: [reason]. Looping back to Phase [N]."
      ```
    - **Rejected:**
      ```
-     clickup_update_task → task_id: [id], status: "open"
+     clickup_update_task → task_id: [id], status: "BACKLOG"
      clickup_create_task_comment → "❌ Rejected: [reason]. Returning to Phase 1."
      ```
 

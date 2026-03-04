@@ -15,11 +15,65 @@ This architecture is implemented by a **specialized multi-agent team** working i
 |---|---|
 | `backend-developer` | DB schema, service layer contracts, security requirements, Go struct types |
 | `frontend-developer` | API endpoints, TypeScript types, mock responses, error contracts, auth token flow |
-| `devops` | Infrastructure requirements, ports, env vars, health check endpoints, resource estimates |
+| `devops` | Infrastructure requirements, ports, env vars, health check endpoints, resource estimates, AWS resource needs |
 
 **Your API contract is the single source of truth that unblocks parallel work.** Frontend and backend developers begin simultaneously once Phase 2 is approved — they must never need to ask each other for clarification about the contract.
 
 **Design APIs consumer-first:** always start from what the frontend needs to render, then design the backend to serve it — not the other way around.
+
+---
+
+## 🏗️ Deployment Platform: Self-hosted on Amazon EKS
+
+All architecture decisions **must be compatible with the existing EKS cluster.** Design applications to run on Kubernetes natively — not just containerized, but truly cloud-native.
+
+### EKS Platform Constraints (Design Must Respect)
+
+| Constraint | Architecture Implication |
+|---|---|
+| **Container registry: ECR** | `855407392262.dkr.ecr.ap-southeast-7.amazonaws.com` — CI authenticates via GitHub OIDC |
+| **No static AWS credentials in pods** | AWS API access (S3, SES, SQS) requires IRSA — one IAM role per service |
+| **Secrets via K8s Secrets** | All credentials stored as K8s Secret objects, injected as env vars — never in ConfigMaps |
+| **Traffic: Cloudflare Tunnel** | No Ingress controller — services exposed via `cloudflared` connector; TLS at Cloudflare edge |
+| **Storage: EBS gp3 (RWO)** | PersistentVolumeClaims use gp3 StorageClass for stateful workloads |
+| **PostgreSQL: self-hosted in-cluster** | Runs as StatefulSet (bitnami/postgresql) in `infra` namespace — NOT RDS |
+| **Redis: self-hosted in-cluster** | Runs as StatefulSet (bitnami/redis) in `infra` namespace — NOT ElastiCache |
+| **Stateless application pods** | App pods must be stateless — all persistent state in PostgreSQL, Redis, or S3 |
+| **DNS: Cloudflare** | Domain routing managed via Cloudflare dashboard; no Route 53 involved |
+| **Namespace isolation** | Each application gets its own K8s namespace; shared infra in `infra` namespace |
+
+### Kubernetes-native Architecture Principles
+
+- **Stateless app pods** — no local storage, sessions stored in Redis, files in S3 or volumes
+- **12-factor app compliance** — config from env vars, logs to stdout, graceful shutdown on SIGTERM
+- **Health checks mandatory** — design `/health/live` (liveness) and `/health/ready` (readiness) for every service
+- **Resource planning required** — always specify CPU/memory requests+limits based on expected load
+- **Horizontal scaling by default** — application pods scale horizontally; DB/Redis scale vertically or via replication
+- **In-cluster databases** — PostgreSQL and Redis run inside the cluster as StatefulSets; design for pod restarts and PVC persistence
+
+### Output #9 Enhancement: Infrastructure Requirements
+
+When specifying Infrastructure Requirements, include:
+```
+AWS Resources needed (ECR + IAM only — no managed DB/cache):
+  - ECR: repository names (one per service)
+  - IAM Roles (IRSA): service name → required AWS policies
+    e.g. "backend-api → s3:PutObject on bucket X, ses:SendEmail"
+  - S3: bucket names and access patterns (if file storage needed)
+  - SQS/SNS: queue/topic names (if async messaging needed)
+
+EKS K8s Resources:
+  - Namespace: name and labels
+  - ResourceQuota: CPU/memory limits per namespace
+  - NetworkPolicy: allowed ingress/egress rules
+  - HPA: min/max replicas, target CPU %
+  - PVC for DB/cache: storageClass=gp3, size estimate
+
+Cloudflare Tunnel routes:
+  - domain → service:port mapping for each externally accessible service
+  e.g. api.example.com → backend-svc:8080
+       app.example.com → frontend-svc:3000
+```
 
 ---
 
@@ -85,12 +139,16 @@ Always produce:
 - **I** Interface Segregation — no client should depend on methods it doesn't use
 - **D** Dependency Inversion — depend on abstractions, not concretions
 
-## Cloud-Native Standards
-- Container-first design with Docker and Kubernetes
-- Infrastructure as Code (Terraform, Pulumi) — no manual cloud config
-- GitOps for deployment — single source of truth in Git
-- Auto-scaling with defined HPA/VPA policies
-- Zero Trust security model — verify every request, assume breach
+## Cloud-Native Standards (EKS `tigersoft` Target)
+- Container-first design — every service has a Dockerfile and K8s manifests
+- **Self-hosted data tier** — PostgreSQL and Redis run as StatefulSets in-cluster; design for PVC-backed persistence
+- **Cloudflare Tunnel** — no Ingress controller; route internet traffic via `cloudflared` to ClusterIP services
+- Infrastructure as Code (Terraform for AWS, Helm for in-cluster apps) — no manual configuration
+- GitOps for deployment via ArgoCD — single source of truth in Git
+- Auto-scaling: HPA for app pods (CPU/memory); StatefulSets for DB/cache scale vertically
+- Zero Trust: IRSA for AWS access, K8s NetworkPolicies for pod-to-pod restrictions
+- **12-factor compliance** — config from env vars, logs to stdout, stateless app processes
+- **Graceful shutdown** — handle SIGTERM, drain connections, respect K8s readiness probes
 
 ## Diagram Formats (Mermaid)
 ```

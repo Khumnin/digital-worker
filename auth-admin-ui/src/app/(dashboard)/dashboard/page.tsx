@@ -15,17 +15,17 @@ const EMPTY_STATS: DashboardStats = {
 };
 
 export default function DashboardPage() {
-  const { getToken, tenantId, isSuperAdmin } = useAuth();
+  const { getToken, isSuperAdmin } = useAuth();
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
 
   useEffect(() => {
     async function load() {
       const token = await getToken();
-      if (!token || !tenantId) return;
+      if (!token) return;
       try {
         const [tenants, users] = await Promise.allSettled([
           isSuperAdmin ? tenantApi.list(token) : Promise.resolve(null),
-          userApi.list(token, tenantId, { page_size: 1 }),
+          userApi.list(token, { page_size: 1 }),
         ]);
 
         const tenantData =
@@ -45,7 +45,7 @@ export default function DashboardPage() {
       } catch {}
     }
     load();
-  }, [getToken, tenantId, isSuperAdmin]);
+  }, [getToken, isSuperAdmin]);
 
   const statCards = [
     ...(isSuperAdmin

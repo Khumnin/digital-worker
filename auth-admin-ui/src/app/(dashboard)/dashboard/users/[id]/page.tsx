@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, UserCheck2, Shield } from "lucide-react";
+import { ArrowLeft, Loader2, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,12 +14,16 @@ import { userApi, roleApi, type User, type Role, ApiError } from "@/lib/api";
 export default function UserDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { getToken, tenantId } = useAuth();
+  const { getToken } = useAuth();
   const [user, setUser] = useState<User | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingRoles, setSavingRoles] = useState(false);
-  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
+
+  // Selected system role names (string set)
+  const [selectedSystemRoles, setSelectedSystemRoles] = useState<string[]>([]);
+  // Selected module roles: Record<module, Set<roleName>>
+  const [selectedModuleRoles, setSelectedModuleRoles] = useState<Record<string, string[]>>({});
 
   const id = params?.id as string;
 
@@ -31,14 +35,20 @@ export default function UserDetailPage() {
     setLoading(true);
     try {
       const token = await getToken();
-      if (!token || !tenantId) return;
+      if (!token) return;
       const [u, allRoles] = await Promise.all([
-        userApi.get(id, token, tenantId),
-        roleApi.list(token, tenantId),
+        userApi.get(id, token),
+        roleApi.list(token),
       ]);
       setUser(u);
       setRoles(allRoles);
-      setSelectedRoleIds(u.roles.map((r) => r.id));
+      // Pre-populate selections from user data
+      setSelectedSystemRoles(u.system_roles ? [...u.system_roles] : []);
+      setSelectedModuleRoles(
+        Object.fromEntries(
+          Object.entries(u.module_roles ?? {}).map(([mod, names]) => [mod, [...names]])
+        )
+      );
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to load user");
     } finally {
@@ -46,12 +56,52 @@ export default function UserDetailPage() {
     }
   }
 
+  // Group roles by module
+  const systemRoles = useMemo(() => roles.filter((r) => r.module === null), [roles]);
+  const moduleGroups = useMemo(() => {
+    const groups: Record<string, Role[]> = {};
+    roles.forEach((r) => {
+      if (r.module) {
+        if (!groups[r.module]) groups[r.module] = [];
+        groups[r.module].push(r);
+      }
+    });
+    return groups;
+  }, [roles]);
+
+  function toggleSystemRole(name: string) {
+    setSelectedSystemRoles((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
+    );
+  }
+
+  function toggleModuleRole(mod: string, name: string) {
+    setSelectedModuleRoles((prev) => {
+      const current = prev[mod] ?? [];
+      const updated = current.includes(name)
+        ? current.filter((n) => n !== name)
+        : [...current, name];
+      return { ...prev, [mod]: updated };
+    });
+  }
+
   async function handleSaveRoles() {
     setSavingRoles(true);
     try {
       const token = await getToken();
-      if (!token || !tenantId || !user) return;
-      await userApi.updateRoles(user.id, selectedRoleIds, token, tenantId);
+      if (!token || !user) return;
+      // Only include modules that have at least one role selected
+      const filteredModuleRoles = Object.fromEntries(
+        Object.entries(selectedModuleRoles).filter(([, names]) => names.length > 0)
+      );
+      await userApi.updateRoles(
+        user.id,
+        {
+          system_roles: selectedSystemRoles,
+          module_roles: filteredModuleRoles,
+        },
+        token
+      );
       toast.success("Roles updated");
       await load();
     } catch (err) {
@@ -65,8 +115,8 @@ export default function UserDetailPage() {
     if (!user) return;
     try {
       const token = await getToken();
-      if (!token || !tenantId) return;
-      await userApi.suspend(user.id, token, tenantId);
+      if (!token) return;
+      await userApi.suspend(user.id, token);
       toast.success("User suspended");
       await load();
     } catch (err) {
@@ -106,7 +156,7 @@ export default function UserDetailPage() {
         </Button>
         <div className="flex-1">
           <h1 className="text-base font-semibold text-semi-black">
-            {user.first_name} {user.last_name}
+            {user.display_name}
           </h1>
           <p className="text-xs text-semi-grey">{user.email}</p>
         </div>
@@ -131,108 +181,155 @@ export default function UserDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* User info */}
-        <Card className="rounded-[10px] border-border shadow-none">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold text-semi-black">
-              Account Info
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-semi-grey">User ID</span>
-              <span className="font-mono text-xs text-semi-black max-w-[180px] truncate">
-                {user.id}
-              </span>
-            </div>
-            <Separator />
-            <div className="flex justify-between items-center">
-              <span className="text-semi-grey">Email verified</span>
-              {user.email_verified_at ? (
-                <span className="text-green-600 text-xs">
-                  {new Date(user.email_verified_at).toLocaleDateString("th-TH")}
-                </span>
-              ) : (
-                <span className="text-semi-grey text-xs">Not verified</span>
-              )}
-            </div>
-            <Separator />
-            <div className="flex justify-between items-center">
-              <span className="text-semi-grey">MFA</span>
-              {user.mfa_enabled ? (
-                <span className="flex items-center gap-1 text-green-600 text-xs">
-                  <UserCheck2 size={13} /> Enabled
-                </span>
-              ) : (
-                <span className="text-semi-grey text-xs">Disabled</span>
-              )}
-            </div>
-            <Separator />
-            <div className="flex justify-between">
-              <span className="text-semi-grey">Joined</span>
-              <span className="text-xs text-semi-black">
-                {new Date(user.created_at).toLocaleDateString("th-TH")}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Role assignment */}
-        <Card className="rounded-[10px] border-border shadow-none">
-          <CardHeader className="pb-3 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-semibold text-semi-black flex items-center gap-2">
-              <Shield size={15} className="text-tiger-red" />
-              Roles
-            </CardTitle>
-            <Button
-              size="sm"
-              onClick={handleSaveRoles}
-              disabled={savingRoles}
-              className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-xs h-8 px-3"
+      {/* Account Info Card */}
+      <Card className="rounded-[10px] border-border shadow-none">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold text-semi-black">
+            Account Info
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="flex justify-between">
+            <span className="text-semi-grey">User ID</span>
+            <span className="font-mono text-xs text-semi-black max-w-[260px] truncate">
+              {user.id}
+            </span>
+          </div>
+          <Separator />
+          <div className="flex justify-between">
+            <span className="text-semi-grey">Tenant</span>
+            <span className="font-mono text-xs text-semi-black">
+              {user.tenant_id}
+            </span>
+          </div>
+          <Separator />
+          <div className="flex justify-between">
+            <span className="text-semi-grey">Status</span>
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                statusColor[user.status] ?? ""
+              }`}
             >
-              {savingRoles && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
-              Save
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-1.5">
-            {roles.map((role) => (
-              <label
-                key={role.id}
-                className={`flex items-center gap-3 cursor-pointer rounded-[10px] border p-2.5 transition-colors ${
-                  selectedRoleIds.includes(role.id)
-                    ? "border-tiger-red/30 bg-[#FFF8F8]"
-                    : "border-border hover:bg-[#fafafa]"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedRoleIds.includes(role.id)}
-                  onChange={() =>
-                    setSelectedRoleIds((ids) =>
-                      ids.includes(role.id)
-                        ? ids.filter((id) => id !== role.id)
-                        : [...ids, role.id]
-                    )
-                  }
-                  className="accent-tiger-red w-4 h-4"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-semi-black font-medium">{role.name}</p>
-                  {role.description && (
-                    <p className="text-xs text-semi-grey truncate">{role.description}</p>
-                  )}
+              {user.status}
+            </span>
+          </div>
+          <Separator />
+          <div className="flex justify-between">
+            <span className="text-semi-grey">Joined</span>
+            <span className="text-xs text-semi-black">
+              {new Date(user.created_at).toLocaleDateString("th-TH")}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Roles Section */}
+      <Card className="rounded-[10px] border-border shadow-none">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-semibold text-semi-black flex items-center gap-2">
+            <Shield size={15} className="text-tiger-red" />
+            Roles
+          </CardTitle>
+          <Button
+            size="sm"
+            onClick={handleSaveRoles}
+            disabled={savingRoles}
+            className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-xs h-8 px-3"
+          >
+            {savingRoles && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+            Save Roles
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* System Roles sub-section */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-semi-grey uppercase tracking-wide">
+              System Roles
+            </p>
+            {systemRoles.length === 0 ? (
+              <p className="text-xs text-semi-grey">No system roles available</p>
+            ) : (
+              <div className="space-y-1.5">
+                {systemRoles.map((role) => (
+                  <label
+                    key={role.id}
+                    className={`flex items-center gap-3 cursor-pointer rounded-[10px] border p-2.5 transition-colors ${
+                      selectedSystemRoles.includes(role.name)
+                        ? "border-tiger-red/30 bg-[#FFF8F8]"
+                        : "border-border hover:bg-[#fafafa]"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedSystemRoles.includes(role.name)}
+                      onChange={() => toggleSystemRole(role.name)}
+                      className="accent-tiger-red w-4 h-4"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-semi-black font-medium">{role.name}</p>
+                      {role.description && (
+                        <p className="text-xs text-semi-grey truncate">{role.description}</p>
+                      )}
+                    </div>
+                    {role.is_system && (
+                      <Badge variant="outline" className="text-[10px] border-tiger-red text-tiger-red shrink-0">
+                        system
+                      </Badge>
+                    )}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Module Roles sub-sections */}
+          {Object.keys(moduleGroups).length > 0 && (
+            <>
+              <Separator />
+              {Object.entries(moduleGroups).map(([mod, modRoles]) => (
+                <div key={mod} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold text-semi-grey uppercase tracking-wide">
+                      Module Roles
+                    </p>
+                    <Badge variant="outline" className="text-[10px] border-indigo-300 text-indigo-600">
+                      {mod}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1.5">
+                    {modRoles.map((role) => {
+                      const checked = (selectedModuleRoles[mod] ?? []).includes(role.name);
+                      return (
+                        <label
+                          key={role.id}
+                          className={`flex items-center gap-3 cursor-pointer rounded-[10px] border p-2.5 transition-colors ${
+                            checked
+                              ? "border-indigo-300/60 bg-indigo-50/50"
+                              : "border-border hover:bg-[#fafafa]"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleModuleRole(mod, role.name)}
+                            className="accent-indigo-600 w-4 h-4"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-semi-black font-medium">{role.name}</p>
+                            {role.description && (
+                              <p className="text-xs text-semi-grey truncate">{role.description}</p>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
-                {role.is_system && (
-                  <Badge variant="outline" className="text-[10px] border-semi-grey text-semi-grey shrink-0">
-                    system
-                  </Badge>
-                )}
-              </label>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+              ))}
+            </>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

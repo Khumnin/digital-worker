@@ -110,16 +110,22 @@ func New(deps Dependencies) *gin.Engine {
 	admin := v1.Group("/admin", authMW, tenantFromJWT(), adminRole)
 	{
 		admin.POST("/users/invite", deps.AdminHandler.InviteUser)
-		admin.PUT("/users/:id/disable", deps.AdminHandler.DisableUser)
+		admin.GET("/users/:id", deps.AdminHandler.GetUser)
+		admin.POST("/users/:id/disable", deps.AdminHandler.DisableUser)
+		admin.POST("/users/:id/enable", deps.AdminHandler.EnableUser)
 		admin.DELETE("/users/:id", deps.AdminHandler.DeleteUser)
 		admin.GET("/users", deps.AdminHandler.ListUsers)
+		admin.PUT("/users/:id/roles", deps.AdminHandler.ReplaceUserRoles)
 		admin.POST("/roles", deps.RoleHandler.CreateRole)
 		admin.GET("/roles", deps.RoleHandler.ListRoles)
+		admin.DELETE("/roles/:id", deps.RoleHandler.DeleteRole)
 		admin.POST("/users/:id/roles", deps.RoleHandler.AssignRole)
 		admin.DELETE("/users/:id/roles/:roleId", deps.RoleHandler.UnassignRole)
 		admin.GET("/audit-log", deps.AuditHandler.List)
 		admin.POST("/oauth/clients", deps.OAuthHandler.RegisterClient)
 		admin.PUT("/tenant/mfa", deps.TenantHandler.UpdateMFAConfig)
+		admin.GET("/tenant", deps.TenantHandler.GetTenantSettings)
+		admin.PUT("/tenant", deps.TenantHandler.UpdateTenantSettings)
 	}
 
 	superAdminRole := middleware.RequireRole("super_admin")
@@ -128,7 +134,8 @@ func New(deps Dependencies) *gin.Engine {
 		superAdmin.POST("/tenants", deps.TenantHandler.ProvisionTenant)
 		superAdmin.GET("/tenants/:id", deps.TenantHandler.GetTenant)
 		superAdmin.GET("/tenants", deps.TenantHandler.ListTenants)
-		superAdmin.PUT("/tenants/:id/suspend", deps.TenantHandler.SuspendTenant)
+		superAdmin.POST("/tenants/:id/suspend", deps.TenantHandler.SuspendTenant)
+		superAdmin.POST("/tenants/:id/activate", deps.TenantHandler.ActivateTenant)
 		superAdmin.POST("/tenants/:id/credentials", deps.TenantHandler.GenerateCredentials)
 		superAdmin.POST("/tenants/:id/credentials/rotate", deps.TenantHandler.RotateCredentials)
 	}

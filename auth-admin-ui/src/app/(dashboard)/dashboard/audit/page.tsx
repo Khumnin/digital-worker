@@ -2,9 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Search, Loader2, ScrollText, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, ScrollText, ChevronLeft, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -18,27 +26,43 @@ import { auditApi, type AuditLog, ApiError } from "@/lib/api";
 
 const PAGE_SIZE = 25;
 
+const ACTION_OPTIONS = [
+  { value: "all", label: "All Actions" },
+  { value: "USER_LOGIN", label: "USER_LOGIN" },
+  { value: "USER_LOGOUT", label: "USER_LOGOUT" },
+  { value: "USER_INVITED", label: "USER_INVITED" },
+  { value: "USER_ENABLED", label: "USER_ENABLED" },
+  { value: "USER_DISABLED", label: "USER_DISABLED" },
+  { value: "ROLE_ASSIGNED", label: "ROLE_ASSIGNED" },
+  { value: "TENANT_SUSPENDED", label: "TENANT_SUSPENDED" },
+  { value: "TENANT_ACTIVATED", label: "TENANT_ACTIVATED" },
+];
+
 export default function AuditPage() {
-  const { getToken, tenantId } = useAuth();
+  const { getToken } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [actionFilter, setActionFilter] = useState("");
+  const [actionFilter, setActionFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   useEffect(() => {
     load();
-  }, [page, tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     setLoading(true);
     try {
       const token = await getToken();
-      if (!token || !tenantId) return;
-      const result = await auditApi.list(token, tenantId, {
+      if (!token) return;
+      const result = await auditApi.list(token, {
         page,
         page_size: PAGE_SIZE,
-        ...(actionFilter ? { action: actionFilter } : {}),
+        ...(actionFilter && actionFilter !== "all" ? { action: actionFilter } : {}),
+        ...(fromDate ? { from: fromDate } : {}),
+        ...(toDate ? { to: toDate } : {}),
       });
       setLogs(result.data);
       setTotal(result.total);
@@ -49,7 +73,7 @@ export default function AuditPage() {
     }
   }
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleApply = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
     load();
@@ -58,6 +82,15 @@ export default function AuditPage() {
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const actionColors: Record<string, string> = {
+    USER_LOGIN: "text-green-600 bg-green-50",
+    USER_LOGOUT: "text-blue-600 bg-blue-50",
+    USER_INVITED: "text-purple-600 bg-purple-50",
+    USER_ENABLED: "text-teal-600 bg-teal-50",
+    USER_DISABLED: "text-orange-600 bg-orange-50",
+    ROLE_ASSIGNED: "text-teal-600 bg-teal-50",
+    TENANT_SUSPENDED: "text-tiger-red bg-red-50",
+    TENANT_ACTIVATED: "text-green-600 bg-green-50",
+    // legacy lowercase keys for backward compat
     login: "text-green-600 bg-green-50",
     logout: "text-blue-600 bg-blue-50",
     register: "text-purple-600 bg-purple-50",
@@ -70,16 +103,49 @@ export default function AuditPage() {
   return (
     <div className="space-y-4">
       {/* Filter bar */}
-      <form onSubmit={handleSearch} className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-semi-grey" />
-          <Input
-            placeholder="Filter by action (e.g. login)"
+      <form onSubmit={handleApply} className="flex items-end gap-3 flex-wrap">
+        {/* Action dropdown */}
+        <div className="space-y-1">
+          <Label className="text-xs text-semi-grey font-medium">Action</Label>
+          <Select
             value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
-            className="pl-9 h-10 rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] text-sm"
-          />
+            onValueChange={(val) => setActionFilter(val)}
+          >
+            <SelectTrigger className="h-10 rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] text-sm min-w-[190px]">
+              <SelectValue placeholder="All Actions" />
+            </SelectTrigger>
+            <SelectContent>
+              {ACTION_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+
+        {/* Date range filters */}
+        <div className="flex items-end gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs text-semi-grey font-medium">From</Label>
+            <Input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="h-10 rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] text-sm w-[148px]"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-semi-grey font-medium">To</Label>
+            <Input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="h-10 rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] text-sm w-[148px]"
+            />
+          </div>
+        </div>
+
         <Button
           type="submit"
           variant="outline"
@@ -138,14 +204,13 @@ export default function AuditPage() {
                       </span>
                     </TableCell>
                     <TableCell className="text-xs text-semi-black max-w-[180px] truncate">
-                      {log.actor_email ?? log.actor_id ?? "—"}
+                      {log.actor_email || log.actor_id || "—"}
                     </TableCell>
                     <TableCell className="text-xs text-semi-grey max-w-[160px] truncate">
-                      {log.target_type ? `${log.target_type}` : "—"}
-                      {log.target_id ? ` · ${log.target_id.slice(0, 8)}…` : ""}
+                      {log.target_id ? `${log.target_id.slice(0, 8)}…` : "—"}
                     </TableCell>
                     <TableCell className="text-xs text-semi-grey font-mono">
-                      {log.ip_address ?? "—"}
+                      {log.ip_address || "—"}
                     </TableCell>
                   </TableRow>
                 );

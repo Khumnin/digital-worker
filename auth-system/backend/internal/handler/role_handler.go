@@ -42,9 +42,10 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"role_id":     role.ID.String(),
+		"id":          role.ID.String(),
 		"name":        role.Name,
 		"description": role.Description,
+		"module":      role.Module,
 		"is_system":   role.IsSystem,
 		"created_at":  role.CreatedAt,
 	})
@@ -61,14 +62,29 @@ func (h *RoleHandler) ListRoles(c *gin.Context) {
 	items := make([]gin.H, len(roles))
 	for i, r := range roles {
 		items[i] = gin.H{
-			"role_id":     r.ID.String(),
+			"id":          r.ID.String(),
 			"name":        r.Name,
 			"description": r.Description,
+			"module":      r.Module,
 			"is_system":   r.IsSystem,
 		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": items})
+}
+
+// DeleteRole handles DELETE /api/v1/admin/roles/:id.
+// Returns 403 if the role is a system role, 409 if it is currently assigned to
+// any user, and 204 No Content on success.
+func (h *RoleHandler) DeleteRole(c *gin.Context) {
+	roleID := c.Param("id")
+
+	if err := h.rbacSvc.DeleteRole(c.Request.Context(), roleID); err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 // AssignRole handles POST /api/v1/admin/users/:id/roles.

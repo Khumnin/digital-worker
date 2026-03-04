@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -9,7 +9,7 @@ import {
   MoreHorizontal,
   Loader2,
   Users as UsersIcon,
-  UserCheck2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,65 +36,84 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/contexts/auth";
 import {
   userApi,
-  roleApi,
   type User,
-  type Role,
   type InviteUserRequest,
   ApiError,
 } from "@/lib/api";
 
+// Known modules — can be extended or derived from roles data
+const KNOWN_MODULES = ["recruit"];
+
+const STATUS_OPTIONS = [
+  { value: "all", label: "All Statuses" },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "pending", label: "Pending" },
+];
+
+const MODULE_OPTIONS = [
+  { value: "all", label: "All Modules" },
+  ...KNOWN_MODULES.map((m) => ({ value: m, label: m.charAt(0).toUpperCase() + m.slice(1) })),
+];
+
 export default function UsersPage() {
   const router = useRouter();
-  const { getToken, tenantId } = useAuth();
+  const { getToken } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [moduleFilter, setModuleFilter] = useState<string>("all");
   const [showInvite, setShowInvite] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [form, setForm] = useState<InviteUserRequest>({
     email: "",
-    first_name: "",
-    last_name: "",
-    role_ids: [],
+    display_name: "",
   });
 
-  useEffect(() => {
-    load();
-  }, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const token = await getToken();
-      if (!token || !tenantId) return;
-      const [usersResult, rolesResult] = await Promise.all([
-        userApi.list(token, tenantId, { page_size: 100 }),
-        roleApi.list(token, tenantId),
-      ]);
+      if (!token) return;
+      const params: { page_size: number; status?: string; module?: string } = {
+        page_size: 100,
+      };
+      if (statusFilter !== "all") params.status = statusFilter;
+      if (moduleFilter !== "all") params.module = moduleFilter;
+      const usersResult = await userApi.list(token, params);
       setUsers(usersResult.data);
-      setRoles(rolesResult);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to load users");
     } finally {
       setLoading(false);
     }
-  }
+  }, [getToken, statusFilter, moduleFilter]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
     setInviting(true);
     try {
       const token = await getToken();
-      if (!token || !tenantId) return;
-      await userApi.invite(form, token, tenantId);
+      if (!token) return;
+      await userApi.invite(form, token);
       toast.success(`Invitation sent to ${form.email}`);
       setShowInvite(false);
-      setForm({ email: "", first_name: "", last_name: "", role_ids: [] });
+      setForm({ email: "", display_name: "" });
       await load();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to invite user");
@@ -106,8 +125,8 @@ export default function UsersPage() {
   async function handleSuspend(id: string) {
     try {
       const token = await getToken();
-      if (!token || !tenantId) return;
-      await userApi.suspend(id, token, tenantId);
+      if (!token) return;
+      await userApi.suspend(id, token);
       toast.success("User suspended");
       await load();
     } catch (err) {
@@ -115,16 +134,23 @@ export default function UsersPage() {
     }
   }
 
+  function clearFilters() {
+    setStatusFilter("all");
+    setModuleFilter("all");
+  }
+
+  const hasActiveFilters = statusFilter !== "all" || moduleFilter !== "all";
+
+  // Client-side search filter (status/module filtered server-side via params)
   const filtered = users.filter((u) => {
     const matchSearch =
       u.email.toLowerCase().includes(search.toLowerCase()) ||
-      `${u.first_name} ${u.last_name}`.toLowerCase().includes(search.toLowerCase());
-    const matchRole =
-      roleFilter === "all" ||
-      (roleFilter === "applicant"
-        ? u.roles.some((r) => r.name === "applicant")
-        : u.roles.some((r) => r.name !== "applicant"));
-    return matchSearch && matchRole;
+      u.display_name.toLowerCase().includes(search.toLowerCase());
+    // If module filter is active and backend doesn't support it, filter client-side too
+    const matchModule =
+      moduleFilter === "all" ||
+      Object.keys(u.module_roles ?? {}).includes(moduleFilter);
+    return matchSearch && matchModule;
   });
 
   const statusColor: Record<string, string> = {
@@ -137,7 +163,8 @@ export default function UsersPage() {
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 max-w-sm">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-semi-grey" />
           <Input
             placeholder="ค้นหาผู้ใช้..."
@@ -147,22 +174,52 @@ export default function UsersPage() {
           />
         </div>
 
-        {/* Role filter chips */}
-        <div className="flex gap-2">
-          {["all", "users", "applicant"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setRoleFilter(f)}
-              className={`px-3 py-1.5 rounded-[1000px] text-xs font-medium border transition-colors ${
-                roleFilter === f
-                  ? "bg-tiger-red text-white border-tiger-red"
-                  : "border-border text-semi-grey hover:border-tiger-red hover:text-tiger-red"
-              }`}
-            >
-              {f === "all" ? "All" : f === "applicant" ? "Applicants" : "HR Users"}
-            </button>
-          ))}
+        {/* Status filter */}
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-semi-grey font-medium whitespace-nowrap">Status</Label>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-10 rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] text-sm min-w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+
+        {/* Module filter */}
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-semi-grey font-medium whitespace-nowrap">Module</Label>
+          <Select value={moduleFilter} onValueChange={setModuleFilter}>
+            <SelectTrigger className="h-10 rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] text-sm min-w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MODULE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Clear filters */}
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="h-10 rounded-[1000px] text-xs text-semi-grey hover:text-semi-black gap-1"
+          >
+            <X size={13} />
+            Clear filters
+          </Button>
+        )}
 
         <Button
           onClick={() => setShowInvite(true)}
@@ -191,7 +248,6 @@ export default function UsersPage() {
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">User</TableHead>
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">Roles</TableHead>
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">Status</TableHead>
-                <TableHead className="text-xs font-semibold text-semi-grey uppercase">MFA</TableHead>
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">Joined</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
@@ -206,28 +262,39 @@ export default function UsersPage() {
                   <TableCell>
                     <div>
                       <p className="text-sm font-medium text-semi-black">
-                        {user.first_name} {user.last_name}
+                        {user.display_name}
                       </p>
                       <p className="text-xs text-semi-grey">{user.email}</p>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {user.roles.map((role) => (
+                      {user.system_roles.map((roleName) => (
                         <Badge
-                          key={role.id}
+                          key={roleName}
                           variant="outline"
                           className={`text-[10px] ${
-                            role.name === "super_admin"
+                            roleName === "super_admin"
                               ? "border-tiger-red text-tiger-red"
-                              : role.name === "applicant"
+                              : roleName === "applicant"
                               ? "border-blue-400 text-blue-600"
                               : "border-border text-semi-grey"
                           }`}
                         >
-                          {role.name}
+                          {roleName}
                         </Badge>
                       ))}
+                      {Object.entries(user.module_roles).flatMap(([mod, modRoles]) =>
+                        modRoles.map((roleName) => (
+                          <Badge
+                            key={`${mod}:${roleName}`}
+                            variant="outline"
+                            className="text-[10px] border-indigo-300 text-indigo-600"
+                          >
+                            {mod}:{roleName}
+                          </Badge>
+                        ))
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -238,13 +305,6 @@ export default function UsersPage() {
                     >
                       {user.status}
                     </span>
-                  </TableCell>
-                  <TableCell>
-                    {user.mfa_enabled ? (
-                      <UserCheck2 size={15} className="text-green-600" />
-                    ) : (
-                      <span className="text-xs text-semi-grey">—</span>
-                    )}
                   </TableCell>
                   <TableCell className="text-xs text-semi-grey">
                     {new Date(user.created_at).toLocaleDateString("th-TH")}
@@ -287,27 +347,15 @@ export default function UsersPage() {
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleInvite} className="space-y-4 mt-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-semi-black">First Name</Label>
-                <Input
-                  required
-                  placeholder="สมชาย"
-                  value={form.first_name}
-                  onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))}
-                  className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-semi-black">Last Name</Label>
-                <Input
-                  required
-                  placeholder="ใจดี"
-                  value={form.last_name}
-                  onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))}
-                  className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-semi-black">Display Name</Label>
+              <Input
+                required
+                placeholder="สมชาย ใจดี"
+                value={form.display_name}
+                onChange={(e) => setForm((f) => ({ ...f, display_name: e.target.value }))}
+                className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11"
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-semi-black">Email</Label>
@@ -320,37 +368,9 @@ export default function UsersPage() {
                 className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11"
               />
             </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-semi-black">Roles</Label>
-              <div className="space-y-1.5">
-                {roles
-                  .filter((r) => !["super_admin"].includes(r.name))
-                  .map((role) => (
-                    <label
-                      key={role.id}
-                      className="flex items-center gap-3 cursor-pointer rounded-[10px] border border-border p-2.5 hover:bg-[#fafafa] transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form.role_ids.includes(role.id)}
-                        onChange={() =>
-                          setForm((f) => ({
-                            ...f,
-                            role_ids: f.role_ids.includes(role.id)
-                              ? f.role_ids.filter((id) => id !== role.id)
-                              : [...f.role_ids, role.id],
-                          }))
-                        }
-                        className="accent-tiger-red w-4 h-4"
-                      />
-                      <div>
-                        <p className="text-sm text-semi-black font-medium">{role.name}</p>
-                        <p className="text-xs text-semi-grey">{role.description}</p>
-                      </div>
-                    </label>
-                  ))}
-              </div>
-            </div>
+            <p className="text-xs text-semi-grey">
+              Roles can be assigned after the user accepts their invitation.
+            </p>
             <DialogFooter className="pt-2">
               <Button
                 type="button"

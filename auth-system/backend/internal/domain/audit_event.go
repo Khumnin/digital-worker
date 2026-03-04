@@ -23,6 +23,7 @@ const (
 	EventAccountLocked         EventType = "ACCOUNT_LOCKED"
 	EventUserInvited           EventType = "USER_INVITED"
 	EventUserDisabled          EventType = "USER_DISABLED"
+	EventUserEnabled           EventType = "USER_ENABLED"
 	EventUserDeleted           EventType = "USER_DELETED"
 
 	// RBAC events

@@ -212,7 +212,7 @@ export default function TenantsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {(tenant.config?.enabled_modules ?? []).map((mod) => (
+                      {(tenant.enabled_modules ?? []).map((mod) => (
                         <Badge
                           key={mod}
                           variant="outline"

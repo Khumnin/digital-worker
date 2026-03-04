@@ -15,6 +15,10 @@ import (
 type RBACService interface {
 	CreateRole(ctx context.Context, name, description string) (*domain.Role, error)
 	ListRoles(ctx context.Context) ([]*domain.Role, error)
+	// DeleteRole removes a non-system role that is not currently assigned to any user.
+	// Returns domain.ErrSystemRole if the role is a system role, or
+	// domain.ErrRoleInUse if any user currently holds the role.
+	DeleteRole(ctx context.Context, roleID string) error
 	AssignRole(ctx context.Context, userID, roleID, assignedBy string) error
 	UnassignRole(ctx context.Context, userID, roleID string) error
 	GetUserRoles(ctx context.Context, userID string) ([]*domain.Role, error)
@@ -57,6 +61,38 @@ func (s *rbacServiceImpl) ListRoles(ctx context.Context) ([]*domain.Role, error)
 	}
 
 	return roles, nil
+}
+
+// DeleteRole validates that the role exists, is not a system role, and is not
+// currently assigned to any user — then deletes it.
+func (s *rbacServiceImpl) DeleteRole(ctx context.Context, roleID string) error {
+	parsedID, err := uuid.Parse(roleID)
+	if err != nil {
+		return fmt.Errorf("invalid role ID: %w", err)
+	}
+
+	role, err := s.roleRepo.FindByID(ctx, parsedID)
+	if err != nil {
+		return fmt.Errorf("find role: %w", err)
+	}
+
+	if role.IsSystem {
+		return domain.ErrSystemRole
+	}
+
+	inUse, err := s.roleRepo.IsAssignedToAnyUser(ctx, parsedID)
+	if err != nil {
+		return fmt.Errorf("check role assignment: %w", err)
+	}
+	if inUse {
+		return domain.ErrRoleInUse
+	}
+
+	if err := s.roleRepo.Delete(ctx, parsedID); err != nil {
+		return fmt.Errorf("delete role: %w", err)
+	}
+
+	return nil
 }
 
 // AssignRole links a role to a user and writes an audit record.

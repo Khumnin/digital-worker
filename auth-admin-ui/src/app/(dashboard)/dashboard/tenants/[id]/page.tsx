@@ -133,6 +133,8 @@ AUTH_PLATFORM_TENANT_SLUG=platform`;
             className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
               tenant.status === "active"
                 ? "bg-green-100 text-green-700 border-green-200"
+                : tenant.status === "pending"
+                ? "bg-yellow-100 text-yellow-700 border-yellow-200"
                 : "bg-red-100 text-tiger-red border-red-200"
             }`}
           >
@@ -162,14 +164,13 @@ AUTH_PLATFORM_TENANT_SLUG=platform`;
           <CardContent className="space-y-3">
             <CopyField label="Tenant ID" value={tenant.id} />
             <CopyField label="Slug" value={tenant.slug} />
-            <CopyField label="Schema" value={tenant.schema_name} />
             <div className="space-y-1">
               <p className="text-xs text-semi-grey font-medium uppercase">Enabled Modules</p>
               <div className="flex flex-wrap gap-1 pt-1">
-                {(tenant.config?.enabled_modules ?? []).length === 0 ? (
+                {(tenant.enabled_modules ?? []).length === 0 ? (
                   <span className="text-xs text-semi-grey">None</span>
                 ) : (
-                  (tenant.config.enabled_modules ?? []).map((mod) => (
+                  (tenant.enabled_modules ?? []).map((mod) => (
                     <Badge
                       key={mod}
                       variant="outline"
@@ -185,7 +186,7 @@ AUTH_PLATFORM_TENANT_SLUG=platform`;
         </Card>
 
         {/* Recruitment Integration Panel */}
-        {(tenant.config?.enabled_modules ?? []).includes("recruitment") && (
+        {(tenant.enabled_modules ?? []).includes("recruitment") && (
           <Card className="rounded-[10px] border-tiger-red/20 bg-[#FFF8F8] shadow-none">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-semi-black flex items-center gap-2">
@@ -218,16 +219,16 @@ AUTH_PLATFORM_TENANT_SLUG=platform`;
 
       <Separator />
 
-      {/* Config details */}
+      {/* Enabled modules detail */}
       <Card className="rounded-[10px] border-border shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold text-semi-black">
-            Configuration
+            Module Configuration
           </CardTitle>
         </CardHeader>
         <CardContent>
           <pre className="text-xs font-mono text-semi-black bg-[#f0f0f0] rounded-[10px] p-4 overflow-auto">
-            {JSON.stringify(tenant.config ?? {}, null, 2)}
+            {JSON.stringify({ enabled_modules: tenant.enabled_modules }, null, 2)}
           </pre>
         </CardContent>
       </Card>

@@ -16,31 +16,34 @@ import (
 )
 
 type Claims struct {
-	Subject  string
-	TenantID string
-	Roles    []string
-	ClientID string
-	Scope    string
-	TTL      time.Duration
+	Subject     string
+	TenantID    string
+	Roles       []string
+	ModuleRoles map[string][]string
+	ClientID    string
+	Scope       string
+	TTL         time.Duration
 }
 
 type ParsedClaims struct {
-	ID        string
-	Subject   string
-	TenantID  string
-	Roles     []string
-	ClientID  string
-	Scope     string
-	IssuedAt  time.Time
-	ExpiresAt time.Time
+	ID          string
+	Subject     string
+	TenantID    string
+	Roles       []string
+	ModuleRoles map[string][]string
+	ClientID    string
+	Scope       string
+	IssuedAt    time.Time
+	ExpiresAt   time.Time
 }
 
 type jwtClaims struct {
 	jwt.RegisteredClaims
-	TenantID string   `json:"tenant_id"`
-	Roles    []string `json:"roles,omitempty"`
-	ClientID string   `json:"client_id,omitempty"`
-	Scope    string   `json:"scope,omitempty"`
+	TenantID    string              `json:"tenant_id"`
+	Roles       []string            `json:"roles,omitempty"`
+	ModuleRoles map[string][]string `json:"module_roles,omitempty"`
+	ClientID    string              `json:"client_id,omitempty"`
+	Scope       string              `json:"scope,omitempty"`
 }
 
 type Signer interface {
@@ -137,6 +140,7 @@ func (ks *KeyStore) Sign(claims Claims) (string, error) {
 		RegisteredClaims: registered,
 		TenantID:         claims.TenantID,
 		Roles:            claims.Roles,
+		ModuleRoles:      claims.ModuleRoles,
 		ClientID:         claims.ClientID,
 		Scope:            claims.Scope,
 	}
@@ -188,14 +192,15 @@ func (ks *KeyStore) Verify(tokenString string) (*ParsedClaims, error) {
 	}
 
 	return &ParsedClaims{
-		ID:        internal.ID,
-		Subject:   internal.Subject,
-		TenantID:  internal.TenantID,
-		Roles:     internal.Roles,
-		ClientID:  internal.ClientID,
-		Scope:     internal.Scope,
-		IssuedAt:  internal.IssuedAt.Time,
-		ExpiresAt: internal.ExpiresAt.Time,
+		ID:          internal.ID,
+		Subject:     internal.Subject,
+		TenantID:    internal.TenantID,
+		Roles:       internal.Roles,
+		ModuleRoles: internal.ModuleRoles,
+		ClientID:    internal.ClientID,
+		Scope:       internal.Scope,
+		IssuedAt:    internal.IssuedAt.Time,
+		ExpiresAt:   internal.ExpiresAt.Time,
 	}, nil
 }
 

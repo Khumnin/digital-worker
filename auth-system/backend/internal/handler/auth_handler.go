@@ -228,6 +228,10 @@ func respondWithServiceError(c *gin.Context, err error) {
 		m = mapping{http.StatusConflict, "ROLE_ALREADY_EXISTS", "A role with this name already exists."}
 	case isError(err, "user already has this role"):
 		m = mapping{http.StatusConflict, "ROLE_ALREADY_ASSIGNED", "The user already has this role."}
+	case isError(err, "cannot delete a system role"):
+		m = mapping{http.StatusForbidden, "SYSTEM_ROLE_PROTECTED", "System roles cannot be deleted"}
+	case isError(err, "cannot delete a role that is assigned to users"):
+		m = mapping{http.StatusConflict, "ROLE_IN_USE", "Cannot delete a role that is assigned to users"}
 	case isError(err, "TOTP code is invalid or has expired"):
 		m = mapping{http.StatusUnauthorized, "INVALID_TOTP_CODE", "The TOTP code is invalid or has expired."}
 	case isError(err, "MFA enrollment is required for this organization"):

@@ -17,11 +17,19 @@ import (
 // preserving the audit trail shape while severing the link to the deleted identity.
 var gdprTombstoneUUID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
 
+// UserWithRoles bundles a user record with their resolved system and module roles.
+type UserWithRoles struct {
+	User        *domain.User
+	SystemRoles []string
+	ModuleRoles map[string][]string
+}
+
 // AdminService exposes privileged user-management operations reserved for
 // tenant administrators.
 type AdminService interface {
 	InviteUser(ctx context.Context, email, firstName, lastName string) (*domain.User, error)
 	DisableUser(ctx context.Context, userID string) error
+	EnableUser(ctx context.Context, userID string) error
 	// DeleteUser is kept for backward compatibility. It now delegates to EraseUser,
 	// performing a full GDPR erasure rather than a simple soft delete.
 	DeleteUser(ctx context.Context, userID string) error
@@ -30,6 +38,8 @@ type AdminService interface {
 	// anonymize PII, soft-delete the user record, and anonymize audit log references.
 	EraseUser(ctx context.Context, targetUserID string, requestedBy uuid.UUID) error
 	ListUsers(ctx context.Context, limit, offset int) ([]*domain.User, int, error)
+	GetUser(ctx context.Context, userID string) (*UserWithRoles, error)
+	ReplaceUserRoles(ctx context.Context, userID string, systemRoles []string, moduleRoles map[string][]string) (*UserWithRoles, error)
 }
 
 type adminServiceImpl struct {
@@ -247,6 +257,118 @@ func (s *adminServiceImpl) ListUsers(ctx context.Context, limit, offset int) ([]
 	}
 
 	return users, total, nil
+}
+
+// GetUser returns a single user by ID with their resolved system and module roles.
+func (s *adminServiceImpl) GetUser(ctx context.Context, userID string) (*UserWithRoles, error) {
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	user, err := s.userRepo.FindByID(ctx, parsedID)
+	if err != nil {
+		return nil, fmt.Errorf("find user: %w", err)
+	}
+
+	return s.resolveUserWithRoles(ctx, user)
+}
+
+// resolveUserWithRoles fetches roles for a user and splits them into system roles
+// and module roles maps.
+func (s *adminServiceImpl) resolveUserWithRoles(ctx context.Context, user *domain.User) (*UserWithRoles, error) {
+	roles, err := s.roleRepo.GetUserRoles(ctx, user.ID)
+	if err != nil {
+		roles = []*domain.Role{}
+	}
+
+	systemRoles := make([]string, 0)
+	moduleRoles := make(map[string][]string)
+
+	for _, r := range roles {
+		if r.Module == nil {
+			systemRoles = append(systemRoles, r.Name)
+		} else {
+			mod := *r.Module
+			moduleRoles[mod] = append(moduleRoles[mod], r.Name)
+		}
+	}
+
+	return &UserWithRoles{
+		User:        user,
+		SystemRoles: systemRoles,
+		ModuleRoles: moduleRoles,
+	}, nil
+}
+
+// EnableUser sets a user's status back to Active.
+func (s *adminServiceImpl) EnableUser(ctx context.Context, userID string) error {
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	active := domain.UserStatusActive
+
+	if _, err := s.userRepo.Update(ctx, parsedID, domain.UpdateUserInput{
+		Status: &active,
+	}); err != nil {
+		return fmt.Errorf("enable user: %w", err)
+	}
+
+	s.writeAuditEvent(ctx, domain.AuditEvent{
+		EventType:    domain.EventUserEnabled,
+		ActorID:      &parsedID,
+		TargetUserID: &parsedID,
+	})
+
+	return nil
+}
+
+// ReplaceUserRoles atomically replaces all roles for a user with the given sets.
+func (s *adminServiceImpl) ReplaceUserRoles(ctx context.Context, userID string, systemRoles []string, moduleRoles map[string][]string) (*UserWithRoles, error) {
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	user, err := s.userRepo.FindByID(ctx, parsedID)
+	if err != nil {
+		return nil, fmt.Errorf("find user: %w", err)
+	}
+
+	// Collect all role names requested.
+	allRoleNames := make([]string, 0, len(systemRoles))
+	allRoleNames = append(allRoleNames, systemRoles...)
+	for _, names := range moduleRoles {
+		allRoleNames = append(allRoleNames, names...)
+	}
+
+	// Resolve role names to IDs.
+	roleIDs := make([]uuid.UUID, 0, len(allRoleNames))
+	for _, name := range allRoleNames {
+		role, findErr := s.roleRepo.FindByName(ctx, name)
+		if findErr != nil {
+			return nil, fmt.Errorf("role %q not found: %w", name, findErr)
+		}
+		roleIDs = append(roleIDs, role.ID)
+	}
+
+	// Delegate atomic replacement to the repository.
+	if replaceErr := s.roleRepo.ReplaceUserRoles(ctx, parsedID, roleIDs); replaceErr != nil {
+		return nil, fmt.Errorf("replace user roles: %w", replaceErr)
+	}
+
+	s.writeAuditEvent(ctx, domain.AuditEvent{
+		EventType:    domain.EventRoleAssigned,
+		TargetUserID: &parsedID,
+		Metadata: map[string]interface{}{
+			"system_roles": systemRoles,
+			"module_roles": moduleRoles,
+		},
+	})
+
+	return s.resolveUserWithRoles(ctx, user)
 }
 
 func (s *adminServiceImpl) enqueueEmail(task EmailTask) {

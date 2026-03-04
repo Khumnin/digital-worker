@@ -12,17 +12,29 @@ import (
 	"tigersoft/auth-system/pkg/crypto"
 )
 
+// UpdateTenantSettingsInput carries the fields that can be updated via PUT /admin/tenant.
+// All fields are optional — only non-nil/provided fields are applied.
+type UpdateTenantSettingsInput struct {
+	MFARequired          *bool
+	SessionDurationHours *int
+	AllowedDomains       []string
+}
+
 // TenantService handles tenant provisioning, retrieval, and lifecycle
 // management.
 type TenantService interface {
 	ProvisionTenant(ctx context.Context, input ProvisionTenantInput) (*domain.Tenant, error)
 	GetTenant(ctx context.Context, id string) (*domain.Tenant, error)
+	GetTenantBySlug(ctx context.Context, slug string) (*domain.Tenant, error)
 	ListTenants(ctx context.Context, limit, offset int) ([]*domain.Tenant, int, error)
 	SuspendTenant(ctx context.Context, id string) error
+	ActivateTenant(ctx context.Context, id string) error
 	GenerateAPICredentials(ctx context.Context, tenantID string) (clientID, clientSecret string, err error)
 	RotateAPICredentials(ctx context.Context, tenantID string) (clientID, clientSecret string, err error)
 	// UpdateMFARequirement toggles the MFA enforcement flag for the tenant.
 	UpdateMFARequirement(ctx context.Context, tenantID string, required bool) error
+	// UpdateTenantSettings applies a partial update to the calling admin's tenant config.
+	UpdateTenantSettings(ctx context.Context, tenantSlug string, input UpdateTenantSettingsInput) (*domain.Tenant, error)
 }
 
 // ProvisionTenantInput carries the fields required to create a new tenant.
@@ -110,6 +122,15 @@ func (s *tenantServiceImpl) GetTenant(ctx context.Context, id string) (*domain.T
 	return tenant, nil
 }
 
+// GetTenantBySlug returns a single tenant by its slug.
+func (s *tenantServiceImpl) GetTenantBySlug(ctx context.Context, slug string) (*domain.Tenant, error) {
+	tenant, err := s.tenantRepo.FindBySlug(ctx, slug)
+	if err != nil {
+		return nil, fmt.Errorf("find tenant by slug: %w", err)
+	}
+	return tenant, nil
+}
+
 // ListTenants returns a paginated list of all tenants with the total count.
 func (s *tenantServiceImpl) ListTenants(ctx context.Context, limit, offset int) ([]*domain.Tenant, int, error) {
 	tenants, total, err := s.tenantRepo.ListAll(ctx, limit, offset)
@@ -129,6 +150,20 @@ func (s *tenantServiceImpl) SuspendTenant(ctx context.Context, id string) error 
 
 	if err := s.tenantRepo.UpdateStatus(ctx, tenantID, domain.TenantStatusSuspended); err != nil {
 		return fmt.Errorf("suspend tenant: %w", err)
+	}
+
+	return nil
+}
+
+// ActivateTenant moves a tenant into the active state.
+func (s *tenantServiceImpl) ActivateTenant(ctx context.Context, id string) error {
+	tenantID, err := uuid.Parse(id)
+	if err != nil {
+		return fmt.Errorf("invalid tenant ID: %w", err)
+	}
+
+	if err := s.tenantRepo.UpdateStatus(ctx, tenantID, domain.TenantStatusActive); err != nil {
+		return fmt.Errorf("activate tenant: %w", err)
 	}
 
 	return nil
@@ -198,6 +233,37 @@ func (s *tenantServiceImpl) UpdateMFARequirement(ctx context.Context, tenantIDSt
 	}
 
 	return nil
+}
+
+// UpdateTenantSettings applies a partial update to the tenant config identified by slug.
+// Only fields provided in the input are mutated; others retain their current values.
+func (s *tenantServiceImpl) UpdateTenantSettings(ctx context.Context, tenantSlug string, input UpdateTenantSettingsInput) (*domain.Tenant, error) {
+	tenant, err := s.tenantRepo.FindBySlug(ctx, tenantSlug)
+	if err != nil {
+		return nil, fmt.Errorf("find tenant by slug: %w", err)
+	}
+
+	if input.MFARequired != nil {
+		tenant.Config.MFARequired = *input.MFARequired
+	}
+	if input.SessionDurationHours != nil {
+		tenant.Config.SessionTTLSeconds = *input.SessionDurationHours * 3600
+	}
+	if input.AllowedDomains != nil {
+		tenant.Config.AllowedCORSOrigins = input.AllowedDomains
+	}
+
+	if err := s.tenantRepo.UpdateConfig(ctx, tenant.ID, tenant.Config); err != nil {
+		return nil, fmt.Errorf("persist tenant settings: %w", err)
+	}
+
+	// Reload to get updated_at from DB.
+	updated, err := s.tenantRepo.FindByID(ctx, tenant.ID)
+	if err != nil {
+		return nil, fmt.Errorf("reload tenant after update: %w", err)
+	}
+
+	return updated, nil
 }
 
 func (s *tenantServiceImpl) enqueueEmail(task EmailTask) {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"tigersoft/auth-system/internal/domain"
+	pgdb "tigersoft/auth-system/internal/infrastructure/postgres"
 	"tigersoft/auth-system/pkg/crypto"
 	"tigersoft/auth-system/pkg/jwtutil"
 )
@@ -101,10 +102,13 @@ func (s *sessionServiceImpl) Refresh(
 		return nil, domain.ErrAccountDisabled
 	}
 
+	// Read the tenant slug from context (set by RequireTenant middleware).
+	tenantSlug, _ := ctx.Value(pgdb.CtxKeyTenantID).(string)
+
 	// Issue a new JWT access token.
 	accessToken, err := s.keyStore.Sign(jwtutil.Claims{
 		Subject:  user.ID.String(),
-		TenantID: "", // Tenant ID flows from context — set at handler layer if needed.
+		TenantID: tenantSlug,
 		Roles:    []string{"user"},
 		TTL:      s.accessTokenTTL,
 	})
