@@ -364,6 +364,38 @@ export const auditApi = {
   },
 };
 
+// ── User self-service (me) endpoints ─────────────────────────────────────────
+
+export interface MeProfile {
+  user_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  mfa_enabled: boolean;
+  created_at: string;
+  tenant_id: string;
+  roles: string[];
+}
+
+export const meApi = {
+  get: (token: string) =>
+    apiFetch<MeProfile>("/api/v1/users/me", { token }),
+
+  updateProfile: (token: string, firstName: string, lastName: string) =>
+    apiFetch<MeProfile>("/api/v1/users/me", {
+      method: "PUT",
+      token,
+      body: { first_name: firstName, last_name: lastName },
+    }),
+
+  changePassword: (token: string, currentPassword: string, newPassword: string) =>
+    apiFetch<{ message: string }>("/api/v1/users/me", {
+      method: "PUT",
+      token,
+      body: { current_password: currentPassword, new_password: newPassword },
+    }),
+};
+
 // ── Settings endpoints ────────────────────────────────────────────────────────
 
 export const settingsApi = {
