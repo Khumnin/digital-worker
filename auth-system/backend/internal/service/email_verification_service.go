@@ -16,6 +16,9 @@ import (
 type EmailVerificationService interface {
 	VerifyEmail(ctx context.Context, rawToken string) error
 	ResendVerification(ctx context.Context, email string) error
+	// AcceptInvite verifies the invitation token and sets the user's initial
+	// password in a single atomic step, activating the account.
+	AcceptInvite(ctx context.Context, rawToken, password string) error
 }
 
 type emailVerificationServiceImpl struct {
@@ -76,6 +79,53 @@ func (s *emailVerificationServiceImpl) VerifyEmail(ctx context.Context, rawToken
 		EventType:    domain.EventEmailVerified,
 		ActorID:      &record.UserID,
 		TargetUserID: &record.UserID,
+	})
+
+	return nil
+}
+
+// AcceptInvite validates the invitation token, hashes the provided password,
+// activates the account (status → active, email_verified_at set), and marks
+// the token consumed — all in one step so the user can log in immediately.
+func (s *emailVerificationServiceImpl) AcceptInvite(ctx context.Context, rawToken, password string) error {
+	tokenHash := crypto.HashTokenString(rawToken)
+
+	record, err := s.tokenRepo.FindEmailVerificationToken(ctx, tokenHash)
+	if err != nil {
+		return fmt.Errorf("find invitation token: %w", err)
+	}
+
+	if !record.IsValid() {
+		return domain.ErrInvalidRefreshToken
+	}
+
+	passwordHash, err := crypto.HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	now := time.Now()
+	activeStatus := domain.UserStatusActive
+
+	if _, err := s.userRepo.Update(ctx, record.UserID, domain.UpdateUserInput{
+		Status:          &activeStatus,
+		EmailVerifiedAt: &now,
+		PasswordHash:    &passwordHash,
+	}); err != nil {
+		return fmt.Errorf("activate invited user: %w", err)
+	}
+
+	if err := s.tokenRepo.MarkEmailVerificationTokenUsed(ctx, tokenHash); err != nil {
+		return fmt.Errorf("mark invitation token used: %w", err)
+	}
+
+	s.writeAuditEvent(ctx, domain.AuditEvent{
+		EventType:    domain.EventEmailVerified,
+		ActorID:      &record.UserID,
+		TargetUserID: &record.UserID,
+		Metadata: map[string]interface{}{
+			"via": "accept_invite",
+		},
 	})
 
 	return nil

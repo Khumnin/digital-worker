@@ -86,6 +86,7 @@ func New(deps Dependencies) *gin.Engine {
 		auth.POST("/register", rlRegister, deps.AuthHandler.Register)
 		auth.POST("/login", rlLogin, deps.AuthHandler.Login)
 		auth.POST("/verify-email", deps.EmailHandler.VerifyEmail)
+		auth.POST("/accept-invite", deps.EmailHandler.AcceptInvite)
 		auth.POST("/resend-verification", deps.EmailHandler.ResendVerification)
 		auth.POST("/forgot-password", rlForgot, deps.PasswordHandler.ForgotPassword)
 		auth.POST("/reset-password", deps.PasswordHandler.ResetPassword)

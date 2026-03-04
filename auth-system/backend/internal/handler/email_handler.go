@@ -22,6 +22,11 @@ type verifyEmailRequest struct {
 	Token string `json:"token" validate:"required,min=1"`
 }
 
+type acceptInviteRequest struct {
+	Token    string `json:"token"    validate:"required,min=1"`
+	Password string `json:"password" validate:"required,min=8,max=128"`
+}
+
 type resendVerificationRequest struct {
 	Email string `json:"email" validate:"required,email"`
 }
@@ -39,6 +44,23 @@ func (h *EmailHandler) VerifyEmail(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Email verified successfully."})
+}
+
+// AcceptInvite handles POST /api/v1/auth/accept-invite.
+// Validates the invitation token and sets the user's initial password,
+// activating the account so they can log in immediately.
+func (h *EmailHandler) AcceptInvite(c *gin.Context) {
+	var req acceptInviteRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+
+	if err := h.emailSvc.AcceptInvite(c.Request.Context(), req.Token, req.Password); err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Invitation accepted. You can now log in."})
 }
 
 // ResendVerification handles POST /api/v1/auth/resend-verification.

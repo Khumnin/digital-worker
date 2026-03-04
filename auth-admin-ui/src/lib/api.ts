@@ -217,6 +217,13 @@ export const authApi = {
       tenantId: tenantSlug,
     }),
 
+  acceptInvite: (token: string, password: string, tenantSlug: string) =>
+    apiFetch<{ message: string }>("/api/v1/auth/accept-invite", {
+      method: "POST",
+      body: { token, password },
+      tenantId: tenantSlug,
+    }),
+
   refresh: (refreshToken: string, tenantSlug: string) =>
     apiFetch<LoginResponse>("/api/v1/auth/token/refresh", {
       method: "POST",
