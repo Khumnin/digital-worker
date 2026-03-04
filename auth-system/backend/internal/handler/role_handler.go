@@ -20,8 +20,9 @@ func NewRoleHandler(svc service.RBACService) *RoleHandler {
 }
 
 type createRoleRequest struct {
-	Name        string `json:"name"        validate:"required,min=1,max=100"`
-	Description string `json:"description" validate:"omitempty,max=500"`
+	Name        string  `json:"name"        validate:"required,min=1,max=100"`
+	Description string  `json:"description" validate:"omitempty,max=500"`
+	Module      *string `json:"module"      validate:"omitempty,min=1,max=100"`
 }
 
 type assignRoleRequest struct {
@@ -35,7 +36,7 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 		return
 	}
 
-	role, err := h.rbacSvc.CreateRole(c.Request.Context(), req.Name, req.Description)
+	role, err := h.rbacSvc.CreateRole(c.Request.Context(), req.Name, req.Description, req.Module)
 	if err != nil {
 		respondWithServiceError(c, err)
 		return
@@ -67,10 +68,11 @@ func (h *RoleHandler) ListRoles(c *gin.Context) {
 			"description": r.Description,
 			"module":      r.Module,
 			"is_system":   r.IsSystem,
+			"created_at":  r.CreatedAt,
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": items})
+	c.JSON(http.StatusOK, items)
 }
 
 // DeleteRole handles DELETE /api/v1/admin/roles/:id.

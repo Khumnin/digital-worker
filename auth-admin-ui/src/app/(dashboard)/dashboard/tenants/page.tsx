@@ -49,6 +49,7 @@ export default function TenantsPage() {
   const [form, setForm] = useState<CreateTenantRequest>({
     name: "",
     slug: "",
+    admin_email: "",
     config: { enabled_modules: [] },
   });
 
@@ -83,7 +84,7 @@ export default function TenantsPage() {
       await tenantApi.create(form, token);
       toast.success(`Tenant "${form.name}" provisioned`);
       setShowCreate(false);
-      setForm({ name: "", slug: "", config: { enabled_modules: [] } });
+      setForm({ name: "", slug: "", admin_email: "", config: { enabled_modules: [] } });
       await load();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to provision tenant");
@@ -296,6 +297,20 @@ export default function TenantsPage() {
                   setForm((f) => ({ ...f, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") }))
                 }
                 className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11 font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-semi-black">
+                Admin Email
+                <span className="text-semi-grey font-normal ml-1">(initial admin user)</span>
+              </Label>
+              <Input
+                required
+                type="email"
+                placeholder="admin@acme.co.th"
+                value={form.admin_email}
+                onChange={(e) => setForm((f) => ({ ...f, admin_email: e.target.value }))}
+                className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11"
               />
             </div>
 

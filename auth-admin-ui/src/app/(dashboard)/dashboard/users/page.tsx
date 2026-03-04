@@ -145,7 +145,7 @@ export default function UsersPage() {
   const filtered = users.filter((u) => {
     const matchSearch =
       u.email.toLowerCase().includes(search.toLowerCase()) ||
-      u.display_name.toLowerCase().includes(search.toLowerCase());
+      (u.display_name ?? "").toLowerCase().includes(search.toLowerCase());
     // If module filter is active and backend doesn't support it, filter client-side too
     const matchModule =
       moduleFilter === "all" ||
@@ -269,7 +269,7 @@ export default function UsersPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {user.system_roles.map((roleName) => (
+                      {(user.system_roles ?? []).map((roleName) => (
                         <Badge
                           key={roleName}
                           variant="outline"
@@ -284,7 +284,7 @@ export default function UsersPage() {
                           {roleName}
                         </Badge>
                       ))}
-                      {Object.entries(user.module_roles).flatMap(([mod, modRoles]) =>
+                      {Object.entries(user.module_roles ?? {}).flatMap(([mod, modRoles]) =>
                         modRoles.map((roleName) => (
                           <Badge
                             key={`${mod}:${roleName}`}

@@ -54,6 +54,7 @@ export interface TenantConfig {
 export interface CreateTenantRequest {
   name: string;
   slug: string;
+  admin_email: string;
   config?: TenantConfig;
 }
 
@@ -294,7 +295,7 @@ export const userApi = {
     }),
 
   suspend: (id: string, token: string) =>
-    apiFetch<void>(`/api/v1/admin/users/${id}/suspend`, {
+    apiFetch<void>(`/api/v1/admin/users/${id}/disable`, {
       method: "POST",
       token,
     }),

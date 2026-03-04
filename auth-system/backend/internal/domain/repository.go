@@ -80,7 +80,7 @@ type RoleRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*Role, error)
 	FindByName(ctx context.Context, name string) (*Role, error)
 	ListAll(ctx context.Context) ([]*Role, error)
-	Create(ctx context.Context, name, description string) (*Role, error)
+	Create(ctx context.Context, name, description string, module *string) (*Role, error)
 	// Delete removes a role by ID. The caller is responsible for ensuring
 	// the role is not a system role and is not assigned to any user before calling this.
 	Delete(ctx context.Context, id uuid.UUID) error

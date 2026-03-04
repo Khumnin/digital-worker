@@ -13,7 +13,7 @@ import (
 
 // RBACService manages roles and their assignment to users within a tenant.
 type RBACService interface {
-	CreateRole(ctx context.Context, name, description string) (*domain.Role, error)
+	CreateRole(ctx context.Context, name, description string, module *string) (*domain.Role, error)
 	ListRoles(ctx context.Context) ([]*domain.Role, error)
 	// DeleteRole removes a non-system role that is not currently assigned to any user.
 	// Returns domain.ErrSystemRole if the role is a system role, or
@@ -44,8 +44,8 @@ func NewRBACService(
 }
 
 // CreateRole persists a new role in the tenant schema.
-func (s *rbacServiceImpl) CreateRole(ctx context.Context, name, description string) (*domain.Role, error) {
-	role, err := s.roleRepo.Create(ctx, name, description)
+func (s *rbacServiceImpl) CreateRole(ctx context.Context, name, description string, module *string) (*domain.Role, error) {
+	role, err := s.roleRepo.Create(ctx, name, description, module)
 	if err != nil {
 		return nil, fmt.Errorf("create role: %w", err)
 	}

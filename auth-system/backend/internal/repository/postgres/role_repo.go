@@ -95,7 +95,7 @@ func (r *PostgresRoleRepo) ListAll(ctx context.Context) ([]*domain.Role, error) 
 	return roles, err
 }
 
-func (r *PostgresRoleRepo) Create(ctx context.Context, name, description string) (*domain.Role, error) {
+func (r *PostgresRoleRepo) Create(ctx context.Context, name, description string, module *string) (*domain.Role, error) {
 	schema, err := pgdb.SchemaFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -104,10 +104,10 @@ func (r *PostgresRoleRepo) Create(ctx context.Context, name, description string)
 	var role *domain.Role
 	err = pgdb.WithTenantSchema(ctx, r.pool, schema, func(conn *pgx.Conn) error {
 		row := conn.QueryRow(ctx, `
-			INSERT INTO roles (id, name, description, is_system, created_at)
-			VALUES (gen_random_uuid(), $1, $2, false, now())
+			INSERT INTO roles (id, name, description, module, is_system, created_at)
+			VALUES (gen_random_uuid(), $1, $2, $3, false, now())
 			RETURNING id, name, description, module, is_system, created_at
-		`, name, description)
+		`, name, description, module)
 		ro, scanErr := scanRole(row)
 		if scanErr != nil {
 			if isUniqueViolation(scanErr) {

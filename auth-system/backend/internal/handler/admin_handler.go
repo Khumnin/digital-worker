@@ -4,6 +4,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -147,13 +148,18 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 
 	items := make([]gin.H, len(users))
 	for i, u := range users {
+		displayName := strings.TrimSpace(u.FirstName + " " + u.LastName)
+		if displayName == "" {
+			displayName = u.Email
+		}
 		items[i] = gin.H{
-			"id":         u.ID.String(),
-			"email":      u.Email,
-			"first_name": u.FirstName,
-			"last_name":  u.LastName,
-			"status":     normalizeUserStatus(string(u.Status)),
-			"created_at": u.CreatedAt,
+			"id":           u.ID.String(),
+			"email":        u.Email,
+			"display_name": displayName,
+			"status":       normalizeUserStatus(string(u.Status)),
+			"system_roles": []string{},
+			"module_roles": map[string][]string{},
+			"created_at":   u.CreatedAt,
 		}
 	}
 
