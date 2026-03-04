@@ -1,0 +1,110 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* shadcn/ui standard tokens */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+
+  /* TGX custom tokens */
+  --color-tiger-red: var(--tiger-red);
+  --color-semi-black: var(--semi-black);
+  --color-semi-grey: var(--semi-grey);
+  --color-page-bg: var(--page-bg);
+
+  /* TGX fonts */
+  --font-sans: var(--font-poppins), var(--font-noto-sans-thai), sans-serif;
+
+  /* TGX radius */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-card: 10px;
+  --radius-button: 1000px;
+  --radius-input: 10px;
+}
+
+:root {
+  /* TGX brand */
+  --tiger-red: #C10016;
+  --semi-black: #3A3A3A;
+  --semi-grey: #BFBFBF;
+  --page-bg: #FAFAFA;
+
+  /* Override shadcn primary with Tiger Red */
+  --radius: 0.625rem;
+  --background: #FAFAFA;
+  --foreground: #3A3A3A;
+  --card: #ffffff;
+  --card-foreground: #3A3A3A;
+  --popover: #ffffff;
+  --popover-foreground: #3A3A3A;
+  --primary: #C10016;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f0f0;
+  --secondary-foreground: #3A3A3A;
+  --muted: #f0f0f0;
+  --muted-foreground: #BFBFBF;
+  --accent: #f0f0f0;
+  --accent-foreground: #3A3A3A;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: #e5e5e5;
+  --input: #f0f0f0;
+  --ring: #C10016;
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #3A3A3A;
+  --sidebar-primary: #C10016;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #FFF0F2;
+  --sidebar-accent-foreground: #C10016;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #C10016;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-page-bg text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
