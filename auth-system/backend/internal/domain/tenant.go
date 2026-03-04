@@ -51,6 +51,7 @@ type TenantConfig struct {
 	GoogleClientSecret          string         `json:"google_client_secret,omitempty"`
 	AllowedCORSOrigins          []string       `json:"allowed_cors_origins,omitempty"`
 	MFARequired                 bool           `json:"mfa_required"`
+	EnabledModules              []string       `json:"enabled_modules,omitempty"`
 }
 
 // DefaultTenantConfig returns a secure-by-default tenant configuration.

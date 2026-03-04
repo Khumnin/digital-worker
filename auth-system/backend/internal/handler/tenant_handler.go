@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"tigersoft/auth-system/internal/middleware"
 	"tigersoft/auth-system/internal/service"
 )
 
@@ -142,6 +143,55 @@ func (h *TenantHandler) GenerateCredentials(c *gin.Context) {
 		"client_id":     clientID,
 		"client_secret": secret,
 		"warning":       "This is the only time the client_secret will be shown. Store it securely.",
+	})
+}
+
+type updateMFAConfigRequest struct {
+	MFARequired bool `json:"mfa_required"`
+}
+
+// UpdateMFAConfig handles PUT /api/v1/admin/tenant/mfa.
+// Toggles MFA enforcement for the calling admin's tenant.
+// The tenant ID is resolved from the JWT claims injected by RequireAuth.
+// Requires the admin role — enforced by the router middleware group.
+func (h *TenantHandler) UpdateMFAConfig(c *gin.Context) {
+	var req updateMFAConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_REQUEST",
+				"message": "Request body is invalid.",
+			},
+		})
+		return
+	}
+
+	// middleware.RequireAuth stores a middleware.JWTClaims value under the
+	// "jwt_claims" key. Extract the TenantID from it directly.
+	claimsVal, ok := c.Get("jwt_claims")
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"error": gin.H{"code": "UNAUTHORIZED", "message": "Authentication required."},
+		})
+		return
+	}
+
+	claims, ok := claimsVal.(middleware.JWTClaims)
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{"code": "INTERNAL_ERROR", "message": "Unexpected claims type in context."},
+		})
+		return
+	}
+
+	if err := h.tenantSvc.UpdateMFARequirement(c.Request.Context(), claims.TenantID, req.MFARequired); err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"mfa_required": req.MFARequired,
+		"message":      "MFA enforcement setting updated.",
 	})
 }
 

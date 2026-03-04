@@ -1,6 +1,6 @@
 ---
 name: developer
-description: Senior Full-Stack Developer specializing in Next.js (App Router) frontend and Go (Gin) backend. Use when building web applications, developing Go APIs, creating Next.js frontends, setting up PostgreSQL/Redis, scaffolding monorepo projects, or writing production-ready code with layered architecture.
+description: FALLBACK full-stack agent. Use this agent ONLY when a task genuinely spans both frontend AND backend simultaneously (e.g., scaffold an entire new monorepo project from scratch, or write an integration guide connecting Next.js to the Go API). For all other tasks, prefer the specialized agents: use frontend-developer for UI/Next.js work, backend-developer for Go/API/database work, and devops for infrastructure. Do NOT use for architecture design, project planning, or writing test strategies.
 tools: Read, Edit, Write, Bash, Grep, Glob
 model: sonnet
 ---

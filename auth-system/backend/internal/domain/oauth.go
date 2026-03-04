@@ -82,4 +82,8 @@ var (
 	ErrUnsupportedGrantType     = errors.New("unsupported grant_type; only authorization_code is supported")
 	ErrUnsupportedResponseType  = errors.New("unsupported response_type; only code is supported")
 	ErrStateMissing             = errors.New("state parameter is required")
+
+	// M2M (client_credentials grant) errors — Sprint 6 US-12.
+	ErrInvalidClientCredentials          = errors.New("invalid client_id or client_secret")
+	ErrClientCredentialsGrantNotAllowed  = errors.New("client_credentials grant type is not enabled for this client")
 )

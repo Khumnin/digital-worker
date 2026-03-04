@@ -37,4 +37,17 @@ const (
 	// Social login events
 	EventGoogleLinked          EventType = "GOOGLE_ACCOUNT_LINKED"
 	EventGoogleLogin           EventType = "GOOGLE_LOGIN"
+
+	// MFA events
+	EventMFAEnabled            EventType = "MFA_ENABLED"
+	EventMFADisabled           EventType = "MFA_DISABLED"
+	EventMFAVerified           EventType = "MFA_VERIFIED"
+	EventMFAFailed             EventType = "MFA_FAILED"
+	EventMFAEnforced           EventType = "MFA_ENFORCEMENT_CHANGED"
+
+	// Profile events
+	EventProfileUpdated        EventType = "PROFILE_UPDATED"
+
+	// GDPR events
+	EventUserErased            EventType = "USER_ERASED"
 )

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-admin-ui-config
+  namespace: henderson
+data:
+  NEXT_PUBLIC_API_URL: "https://auth.tgstack.dev"
+  NEXT_PUBLIC_APP_NAME: "TGX Auth Console"
+  PORT: "3000"
+  NODE_ENV: "production"

@@ -6,6 +6,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"tigersoft/auth-system/internal/middleware"
 	"tigersoft/auth-system/internal/service"
 )
 
@@ -60,11 +62,21 @@ func (h *AdminHandler) DisableUser(c *gin.Context) {
 }
 
 // DeleteUser handles DELETE /api/v1/admin/users/:id.
-// Permanently removes the user. Returns 204 No Content on success.
+// Performs a full GDPR erasure: anonymizes PII, revokes sessions, removes
+// MFA codes, social links, and OAuth codes. Returns 204 No Content on success.
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	userID := c.Param("id")
 
-	if err := h.adminSvc.DeleteUser(c.Request.Context(), userID); err != nil {
+	// Extract the requesting admin's identity for the audit trail.
+	requestedBy := uuid.Nil
+	if claimsVal, exists := c.Get("jwt_claims"); exists {
+		claims := claimsVal.(middleware.JWTClaims)
+		if parsed, parseErr := uuid.Parse(claims.UserID); parseErr == nil {
+			requestedBy = parsed
+		}
+	}
+
+	if err := h.adminSvc.EraseUser(c.Request.Context(), userID, requestedBy); err != nil {
 		respondWithServiceError(c, err)
 		return
 	}
@@ -110,3 +122,5 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 		"offset": offset,
 	})
 }
+
+

@@ -25,7 +25,8 @@ const (
 	pkceMethodS256  = "S256"
 )
 
-// OAuthService handles the OAuth 2.0 Authorization Code + PKCE flow.
+// OAuthService handles the OAuth 2.0 Authorization Code + PKCE flow,
+// and the client_credentials grant for M2M access (Sprint 6 US-12).
 type OAuthService interface {
 	// RegisterClient creates a new OAuth 2.0 client for the calling admin.
 	RegisterClient(ctx context.Context, input RegisterClientInput) (*RegisterClientResult, error)
@@ -35,6 +36,9 @@ type OAuthService interface {
 
 	// ExchangeToken validates a code + PKCE verifier and returns JWT access + refresh tokens.
 	ExchangeToken(ctx context.Context, input ExchangeTokenInput) (*ExchangeTokenResult, error)
+
+	// M2MToken issues an access token for the client_credentials grant (no user, no refresh token).
+	M2MToken(ctx context.Context, input M2MTokenInput) (*M2MTokenResult, error)
 }
 
 type oauthServiceImpl struct {
@@ -310,6 +314,86 @@ func (s *oauthServiceImpl) ExchangeToken(ctx context.Context, in ExchangeTokenIn
 		TokenType:    "Bearer",
 		ExpiresIn:    int(s.accessTTL.Seconds()),
 		Scope:        strings.Join(code.Scopes, " "),
+	}, nil
+}
+
+// ── US-12: M2M Token (client_credentials grant) ───────────────────────────────
+
+// M2MTokenInput carries the credentials and scope for a client_credentials grant.
+type M2MTokenInput struct {
+	ClientID     string
+	ClientSecret string
+	Scope        string
+	TenantID     string
+}
+
+// M2MTokenResult holds the issued access token for a machine-to-machine client.
+// Per RFC 6749 §4.4.3 there is no refresh token for this grant type.
+type M2MTokenResult struct {
+	AccessToken string
+	TokenType   string
+	ExpiresIn   int
+	Scope       string
+}
+
+func (s *oauthServiceImpl) M2MToken(ctx context.Context, in M2MTokenInput) (*M2MTokenResult, error) {
+	client, err := s.clientRepo.FindByClientID(ctx, in.ClientID)
+	if err != nil {
+		// Obscure the exact reason to prevent client enumeration.
+		return nil, domain.ErrInvalidClientCredentials
+	}
+
+	// Verify the client supports client_credentials.
+	hasGrant := false
+	for _, g := range client.GrantTypes {
+		if g == "client_credentials" {
+			hasGrant = true
+			break
+		}
+	}
+	if !hasGrant {
+		return nil, domain.ErrClientCredentialsGrantNotAllowed
+	}
+
+	// Verify secret: compare stored hash against the hash of the supplied secret.
+	if crypto.HashTokenString(in.ClientSecret) != client.ClientSecret {
+		return nil, domain.ErrInvalidClientCredentials
+	}
+
+	// Validate requested scopes against the client's allowed scopes.
+	requestedScopes := parseScopes(in.Scope)
+	for _, rs := range requestedScopes {
+		if !client.HasScope(rs) {
+			return nil, domain.ErrInvalidScope
+		}
+	}
+
+	// Issue a JWT whose subject is the client_id — no user identity involved.
+	accessToken, err := s.jwtSvc.Sign(jwtutil.Claims{
+		Subject:  in.ClientID,
+		TenantID: in.TenantID,
+		Roles:    []string{},
+		Scope:    strings.Join(requestedScopes, " "),
+		ClientID: in.ClientID,
+		TTL:      s.accessTTL,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("sign M2M access token: %w", err)
+	}
+
+	s.writeAudit(ctx, domain.AuditEvent{
+		EventType: domain.EventOAuthTokenIssued,
+		Metadata: map[string]interface{}{
+			"client_id":  in.ClientID,
+			"grant_type": "client_credentials",
+		},
+	})
+
+	return &M2MTokenResult{
+		AccessToken: accessToken,
+		TokenType:   "Bearer",
+		ExpiresIn:   int(s.accessTTL.Seconds()),
+		Scope:       strings.Join(requestedScopes, " "),
 	}, nil
 }
 

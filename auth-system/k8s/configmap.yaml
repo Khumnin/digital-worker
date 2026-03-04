@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-api-config
+  namespace: henderson
+  labels:
+    app.kubernetes.io/name: auth-api
+    app.kubernetes.io/part-of: tigersoft-auth
+data:
+  PORT: "8080"
+  ENV: "production"
+  JWT_KEY_ID: "key-prod-1"
+  # Update these to match your actual domain after DNS is configured
+  JWT_ISSUER: "https://auth.yourdomain.com"
+  JWT_AUDIENCE: "tigersoft-auth"
+  AUTH_SERVICE_BASE_URL: "https://auth.yourdomain.com"
+  EMAIL_FROM: "auth@yourdomain.com"
+  # Internal cluster service addresses
+  # DATABASE_URL and REDIS_URL are in the Secret

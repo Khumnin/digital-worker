@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"tigersoft/auth-system/internal/domain"
@@ -74,5 +75,19 @@ func (r *postgresAuthCodeRepo) MarkUsed(ctx context.Context, codeHash string) er
 		_, err := conn.Exec(ctx,
 			`UPDATE oauth_authorization_codes SET used = true WHERE code_hash = $1`, codeHash)
 		return err
+	})
+}
+
+// DeleteByUserID removes all authorization codes issued to the given user.
+// Called on password change and GDPR erasure to invalidate outstanding codes.
+func (r *postgresAuthCodeRepo) DeleteByUserID(ctx context.Context, userID uuid.UUID) error {
+	schema, err := pgdb.SchemaFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	return pgdb.WithTenantSchema(ctx, r.pool, schema, func(conn *pgx.Conn) error {
+		_, execErr := conn.Exec(ctx,
+			`DELETE FROM oauth_authorization_codes WHERE user_id = $1`, userID)
+		return execErr
 	})
 }

@@ -32,6 +32,7 @@ type authServiceImpl struct {
 	roleRepo    domain.RoleRepository
 	jwtSvc      jwtutil.Signer
 	emailCh     chan<- EmailTask
+	mfaSvc      MFAService
 	cfg         AuthServiceConfig
 }
 
@@ -54,6 +55,7 @@ func NewAuthService(
 	roleRepo domain.RoleRepository,
 	jwtSvc jwtutil.Signer,
 	emailCh chan<- EmailTask,
+	mfaSvc MFAService,
 	cfg AuthServiceConfig,
 ) AuthService {
 	return &authServiceImpl{
@@ -65,6 +67,7 @@ func NewAuthService(
 		roleRepo:    roleRepo,
 		jwtSvc:      jwtSvc,
 		emailCh:     emailCh,
+		mfaSvc:      mfaSvc,
 		cfg:         cfg,
 	}
 }
@@ -87,6 +90,7 @@ type RegisterResult struct {
 type LoginInput struct {
 	Email     string
 	Password  string
+	TOTPCode  string // optional; required only when the account has MFA enabled
 	IPAddress string
 	UserAgent string
 }
@@ -265,6 +269,32 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 	if resetErr := s.userRepo.ResetFailedLoginCount(ctx, user.ID); resetErr != nil {
 		slog.Error("failed to reset login count", "user_id", user.ID, "error", resetErr)
 	}
+
+	// MFA enforcement: if the tenant requires MFA but the user has not enrolled,
+	// block login and prompt them to set up TOTP before proceeding.
+	if tenant.Config.MFARequired && !user.MFAEnabled {
+		return nil, domain.ErrMFAEnrollmentRequired
+	}
+
+	// MFA step-up: if the user has MFA enabled, a TOTP code is required.
+	if user.MFAEnabled {
+		if input.TOTPCode == "" {
+			// Signal to the handler that MFA input is needed (not a hard failure).
+			return nil, domain.ErrMFARequired
+		}
+		if err := s.mfaSvc.VerifyTOTP(ctx, user.ID, input.TOTPCode); err != nil {
+			s.writeAuditEvent(ctx, domain.AuditEvent{
+				EventType:    domain.EventLoginFailure,
+				ActorID:      &user.ID,
+				ActorIP:      input.IPAddress,
+				ActorUA:      input.UserAgent,
+				TargetUserID: &user.ID,
+				Metadata:     map[string]interface{}{"reason": "invalid_totp"},
+			})
+			return nil, domain.ErrInvalidTOTPCode
+		}
+	}
+
 	if _, updateErr := s.userRepo.Update(ctx, user.ID, domain.UpdateUserInput{
 		LastLoginAt: timePtr(time.Now()),
 	}); updateErr != nil {

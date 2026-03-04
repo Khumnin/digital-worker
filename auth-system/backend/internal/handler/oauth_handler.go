@@ -136,17 +136,24 @@ func (h *OAuthHandler) Authorize(c *gin.Context) {
 	})
 }
 
-// ── US-11c: Token Exchange ────────────────────────────────────────────────────
+// ── US-11c / US-12: Token Endpoint ───────────────────────────────────────────
 
+// tokenRequest accepts both application/json and application/x-www-form-urlencoded
+// (RFC 6749 §4.1.3 and §4.4.2). RedirectURI is required only for authorization_code.
 type tokenRequest struct {
 	GrantType    string `json:"grant_type"    form:"grant_type"    binding:"required"`
 	Code         string `json:"code"          form:"code"`
 	CodeVerifier string `json:"code_verifier" form:"code_verifier"`
 	ClientID     string `json:"client_id"     form:"client_id"     binding:"required"`
-	RedirectURI  string `json:"redirect_uri"  form:"redirect_uri"  binding:"required"`
+	ClientSecret string `json:"client_secret" form:"client_secret"`
+	RedirectURI  string `json:"redirect_uri"  form:"redirect_uri"`
+	Scope        string `json:"scope"         form:"scope"`
 }
 
-// Token handles POST /api/v1/oauth/token (authorization_code grant + PKCE).
+// Token handles POST /api/v1/oauth/token.
+// Dispatches to the appropriate grant type handler:
+//   - authorization_code (PKCE) — US-11c
+//   - client_credentials (M2M)  — US-12
 func (h *OAuthHandler) Token(c *gin.Context) {
 	var req tokenRequest
 	if err := c.ShouldBind(&req); err != nil {
@@ -155,16 +162,33 @@ func (h *OAuthHandler) Token(c *gin.Context) {
 		})
 		return
 	}
-	if req.GrantType != "authorization_code" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "unsupported_grant_type",
-			"error_description": "only authorization_code grant type is supported",
-		})
-		return
-	}
 
 	tenantID, _ := c.Get("tenant_id")
 	tenantIDStr, _ := tenantID.(string)
+
+	switch req.GrantType {
+	case "authorization_code":
+		h.handleAuthorizationCode(c, req, tenantIDStr)
+
+	case "client_credentials":
+		h.handleClientCredentials(c, req, tenantIDStr)
+
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":             "unsupported_grant_type",
+			"error_description": "supported grant types: authorization_code, client_credentials",
+		})
+	}
+}
+
+// handleAuthorizationCode processes the authorization_code + PKCE grant (RFC 6749 §4.1).
+func (h *OAuthHandler) handleAuthorizationCode(c *gin.Context, req tokenRequest, tenantIDStr string) {
+	if req.RedirectURI == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid_request", "error_description": "redirect_uri is required for authorization_code grant",
+		})
+		return
+	}
 
 	result, err := h.oauthSvc.ExchangeToken(c.Request.Context(), service.ExchangeTokenInput{
 		Code:         req.Code,
@@ -200,6 +224,53 @@ func (h *OAuthHandler) Token(c *gin.Context) {
 		"token_type":    result.TokenType,
 		"expires_in":    result.ExpiresIn,
 		"scope":         result.Scope,
+	})
+}
+
+// handleClientCredentials processes the client_credentials grant (RFC 6749 §4.4).
+func (h *OAuthHandler) handleClientCredentials(c *gin.Context, req tokenRequest, tenantIDStr string) {
+	if req.ClientSecret == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid_client", "error_description": "client_secret is required for client_credentials grant",
+		})
+		return
+	}
+
+	result, err := h.oauthSvc.M2MToken(c.Request.Context(), service.M2MTokenInput{
+		ClientID:     req.ClientID,
+		ClientSecret: req.ClientSecret,
+		Scope:        req.Scope,
+		TenantID:     tenantIDStr,
+	})
+	if err != nil {
+		errCode := "invalid_client"
+		status := http.StatusUnauthorized
+		switch {
+		case errors.Is(err, domain.ErrInvalidClientCredentials):
+			errCode = "invalid_client"
+			status = http.StatusUnauthorized
+		case errors.Is(err, domain.ErrClientCredentialsGrantNotAllowed):
+			errCode = "unauthorized_client"
+			status = http.StatusForbidden
+		case errors.Is(err, domain.ErrInvalidScope):
+			errCode = "invalid_scope"
+			status = http.StatusBadRequest
+		case errors.Is(err, domain.ErrOAuthClientNotFound):
+			errCode = "invalid_client"
+			status = http.StatusUnauthorized
+		}
+		c.JSON(status, gin.H{
+			"error": errCode, "error_description": err.Error(),
+		})
+		return
+	}
+
+	// RFC 6749 §4.4.3 — no refresh_token for client_credentials
+	c.JSON(http.StatusOK, gin.H{
+		"access_token": result.AccessToken,
+		"token_type":   result.TokenType,
+		"expires_in":   result.ExpiresIn,
+		"scope":        result.Scope,
 	})
 }
 

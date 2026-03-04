@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-api
+  namespace: henderson
+  labels:
+    app.kubernetes.io/name: auth-api
+    app.kubernetes.io/part-of: tigersoft-auth
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: auth-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0   # zero-downtime: always keep 2 running during rollout
+  template:
+    metadata:
+      labels:
+        app: auth-api
+        app.kubernetes.io/name: auth-api
+        app.kubernetes.io/part-of: tigersoft-auth
+    spec:
+      serviceAccountName: auth-api
+      # Run migrations as an init container before the API starts
+      initContainers:
+        - name: migrate
+          image: REGISTRY_PLACEHOLDER/tigersoft-auth:latest
+          imagePullPolicy: Always
+          command: ["/migrate", "-scope=global", "-direction=up", "-seed-platform=true"]
+          envFrom:
+            - configMapRef:
+                name: auth-api-config
+            - secretRef:
+                name: auth-api-secrets
+      containers:
+        - name: auth-api
+          image: REGISTRY_PLACEHOLDER/tigersoft-auth:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: auth-api-config
+            - secretRef:
+                name: auth-api-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534   # nobody (distroless default)
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30

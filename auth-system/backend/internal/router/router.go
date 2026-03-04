@@ -21,6 +21,7 @@ type Dependencies struct {
 	PasswordHandler  *handler.PasswordHandler
 	SessionHandler   *handler.SessionHandler
 	UserHandler      *handler.UserHandler
+	MFAHandler       *handler.MFAHandler
 	AdminHandler     *handler.AdminHandler
 	TenantHandler    *handler.TenantHandler
 	RoleHandler      *handler.RoleHandler
@@ -28,6 +29,7 @@ type Dependencies struct {
 	GoogleHandler    *handler.GoogleHandler
 	AuditHandler     *handler.AuditHandler
 	WellKnownHandler *handler.WellKnownHandler
+	HealthHandler    *handler.HealthHandler
 	JWTKeyStore      *jwtutil.KeyStore
 	TenantCache      middleware.TenantCache
 	RateLimiter      middleware.RateLimiter
@@ -41,13 +43,16 @@ func New(deps Dependencies) *gin.Engine {
 
 	r := gin.New()
 
+	// MaxBodySize must be first — it wraps the request body before any handler
+	// reads it. 64 KB is sufficient for all auth API payloads.
+	r.Use(middleware.MaxBodySize(64 * 1024))
 	r.Use(middleware.RequestID())
 	r.Use(middleware.StructuredLogger())
 	r.Use(middleware.SecureHeaders())
 	r.Use(middleware.CORS(deps.Config.CORS.AllowedOrigins))
 	r.Use(gin.Recovery())
 
-	r.GET("/health", healthHandler(deps))
+	r.GET("/health", deps.HealthHandler.Health)
 	r.GET("/metrics", gin.WrapH(metricsHandler()))
 	r.GET("/.well-known/jwks.json", deps.WellKnownHandler.JWKS)
 
@@ -95,6 +100,10 @@ func New(deps Dependencies) *gin.Engine {
 		authed.POST("/auth/logout/all", deps.AuthHandler.LogoutAll)
 		authed.GET("/users/me", deps.UserHandler.GetMe)
 		authed.PUT("/users/me", deps.UserHandler.UpdateMe)
+		authed.DELETE("/users/me", deps.UserHandler.DeleteMe)
+		authed.POST("/users/me/mfa/generate", deps.MFAHandler.Generate)
+		authed.POST("/users/me/mfa/confirm", deps.MFAHandler.Confirm)
+		authed.DELETE("/users/me/mfa", deps.MFAHandler.Disable)
 	}
 
 	adminRole := middleware.RequireRole("admin")
@@ -110,6 +119,7 @@ func New(deps Dependencies) *gin.Engine {
 		admin.DELETE("/users/:id/roles/:roleId", deps.RoleHandler.UnassignRole)
 		admin.GET("/audit-log", deps.AuditHandler.List)
 		admin.POST("/oauth/clients", deps.OAuthHandler.RegisterClient)
+		admin.PUT("/tenant/mfa", deps.TenantHandler.UpdateMFAConfig)
 	}
 
 	superAdminRole := middleware.RequireRole("super_admin")
@@ -138,15 +148,6 @@ func New(deps Dependencies) *gin.Engine {
 	})
 
 	return r
-}
-
-func healthHandler(deps Dependencies) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "ok",
-			"service": "auth-api",
-		})
-	}
 }
 
 func metricsHandler() http.Handler {

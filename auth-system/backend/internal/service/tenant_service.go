@@ -21,6 +21,8 @@ type TenantService interface {
 	SuspendTenant(ctx context.Context, id string) error
 	GenerateAPICredentials(ctx context.Context, tenantID string) (clientID, clientSecret string, err error)
 	RotateAPICredentials(ctx context.Context, tenantID string) (clientID, clientSecret string, err error)
+	// UpdateMFARequirement toggles the MFA enforcement flag for the tenant.
+	UpdateMFARequirement(ctx context.Context, tenantID string, required bool) error
 }
 
 // ProvisionTenantInput carries the fields required to create a new tenant.
@@ -173,6 +175,29 @@ func (s *tenantServiceImpl) RotateAPICredentials(ctx context.Context, tenantIDSt
 	}
 
 	return newClientID, rawSecret, nil
+}
+
+// UpdateMFARequirement sets the mfa_required flag on the tenant's stored config.
+// Loads the current config, toggles the flag, and persists the full config JSON
+// so all other fields remain unchanged.
+func (s *tenantServiceImpl) UpdateMFARequirement(ctx context.Context, tenantIDStr string, required bool) error {
+	tenantID, err := uuid.Parse(tenantIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid tenant ID: %w", err)
+	}
+
+	tenant, err := s.tenantRepo.FindByID(ctx, tenantID)
+	if err != nil {
+		return fmt.Errorf("find tenant for MFA update: %w", err)
+	}
+
+	tenant.Config.MFARequired = required
+
+	if err := s.tenantRepo.UpdateConfig(ctx, tenantID, tenant.Config); err != nil {
+		return fmt.Errorf("persist MFA requirement change: %w", err)
+	}
+
+	return nil
 }
 
 func (s *tenantServiceImpl) enqueueEmail(task EmailTask) {
