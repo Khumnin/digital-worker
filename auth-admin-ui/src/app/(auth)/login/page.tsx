@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,25 +51,10 @@ export default function LoginPage() {
         {/* Logo / Brand */}
         <div className="mb-8 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-tiger-red mb-4">
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M12 2L3 7V17L12 22L21 17V7L12 2Z"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M12 2V22M3 7L21 17M21 7L3 17"
-                stroke="white"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <line x1="3" y1="14" x2="10" y2="3" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+              <line x1="7" y1="15" x2="14" y2="4" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+              <line x1="11" y1="15" x2="18" y2="4" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.7"/>
             </svg>
           </div>
           <h1 className="text-xl font-semibold text-semi-black">
@@ -148,6 +134,13 @@ export default function LoginPage() {
                 )}
               </button>
             </div>
+          </div>
+
+          {/* Forgot password */}
+          <div className="text-right">
+            <Link href="/forgot-password" className="text-xs text-tiger-red hover:underline">
+              Forgot password?
+            </Link>
           </div>
 
           {/* Submit */}

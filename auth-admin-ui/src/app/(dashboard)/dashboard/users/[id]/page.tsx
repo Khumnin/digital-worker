@@ -3,23 +3,24 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Shield, Send } from "lucide-react";
+import { ArrowLeft, Loader2, Shield, Send, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/auth";
-import { userApi, roleApi, type User, type Role, ApiError } from "@/lib/api";
+import { userApi, roleApi, authApi, type User, type Role, ApiError } from "@/lib/api";
 
 export default function UserDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { getToken } = useAuth();
+  const { getToken, isAdmin, tenantSlug } = useAuth();
   const [user, setUser] = useState<User | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingRoles, setSavingRoles] = useState(false);
   const [resending, setResending] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
 
   // Selected system role names (string set)
   const [selectedSystemRoles, setSelectedSystemRoles] = useState<string[]>([]);
@@ -140,6 +141,19 @@ export default function UserDetailPage() {
     }
   }
 
+  async function handleSendPasswordReset() {
+    if (!user) return;
+    setSendingReset(true);
+    try {
+      await authApi.forgotPassword(user.email, tenantSlug);
+      toast.success("Password reset email sent.");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to send password reset.");
+    } finally {
+      setSendingReset(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -184,7 +198,7 @@ export default function UserDetailPage() {
           >
             {user.status}
           </span>
-          {user.status === "pending" && (
+          {isAdmin && user.status === "pending" && (
             <Button
               variant="outline"
               size="sm"
@@ -200,7 +214,22 @@ export default function UserDetailPage() {
               Resend Invite
             </Button>
           )}
-          {user.status === "active" && (
+          {isAdmin && user.status === "active" && (
+            <Button
+              onClick={handleSendPasswordReset}
+              disabled={sendingReset}
+              variant="outline"
+              className="rounded-[1000px] text-xs h-8 text-semi-black border-border"
+            >
+              {sendingReset ? (
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              ) : (
+                <KeyRound size={12} className="mr-1.5" />
+              )}
+              Send Password Reset
+            </Button>
+          )}
+          {isAdmin && user.status === "active" && (
             <Button
               variant="outline"
               size="sm"
@@ -262,15 +291,17 @@ export default function UserDetailPage() {
             <Shield size={15} className="text-tiger-red" />
             Roles
           </CardTitle>
-          <Button
-            size="sm"
-            onClick={handleSaveRoles}
-            disabled={savingRoles}
-            className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-xs h-8 px-3"
-          >
-            {savingRoles && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
-            Save Roles
-          </Button>
+          {isAdmin && (
+            <Button
+              size="sm"
+              onClick={handleSaveRoles}
+              disabled={savingRoles}
+              className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-xs h-8 px-3"
+            >
+              {savingRoles && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+              Save Roles
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-5">
           {/* System Roles sub-section */}
@@ -285,7 +316,9 @@ export default function UserDetailPage() {
                 {systemRoles.map((role) => (
                   <label
                     key={role.id}
-                    className={`flex items-center gap-3 cursor-pointer rounded-[10px] border p-2.5 transition-colors ${
+                    className={`flex items-center gap-3 rounded-[10px] border p-2.5 transition-colors ${
+                      isAdmin ? "cursor-pointer" : "cursor-default"
+                    } ${
                       selectedSystemRoles.includes(role.name)
                         ? "border-tiger-red/30 bg-[#FFF8F8]"
                         : "border-border hover:bg-[#fafafa]"
@@ -294,7 +327,8 @@ export default function UserDetailPage() {
                     <input
                       type="checkbox"
                       checked={selectedSystemRoles.includes(role.name)}
-                      onChange={() => toggleSystemRole(role.name)}
+                      onChange={() => isAdmin && toggleSystemRole(role.name)}
+                      disabled={!isAdmin}
                       className="accent-tiger-red w-4 h-4"
                     />
                     <div className="flex-1 min-w-0">
@@ -334,7 +368,9 @@ export default function UserDetailPage() {
                       return (
                         <label
                           key={role.id}
-                          className={`flex items-center gap-3 cursor-pointer rounded-[10px] border p-2.5 transition-colors ${
+                          className={`flex items-center gap-3 rounded-[10px] border p-2.5 transition-colors ${
+                            isAdmin ? "cursor-pointer" : "cursor-default"
+                          } ${
                             checked
                               ? "border-indigo-300/60 bg-indigo-50/50"
                               : "border-border hover:bg-[#fafafa]"
@@ -343,7 +379,8 @@ export default function UserDetailPage() {
                           <input
                             type="checkbox"
                             checked={checked}
-                            onChange={() => toggleModuleRole(mod, role.name)}
+                            onChange={() => isAdmin && toggleModuleRole(mod, role.name)}
+                            disabled={!isAdmin}
                             className="accent-indigo-600 w-4 h-4"
                           />
                           <div className="flex-1 min-w-0">

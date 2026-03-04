@@ -94,6 +94,7 @@ export interface UpdateUserRolesRequest {
 export interface InviteUserRequest {
   email: string;
   display_name: string;
+  initial_role?: string;
 }
 
 export interface AuditLog {
@@ -235,6 +236,20 @@ export const authApi = {
     apiFetch<void>("/api/v1/auth/logout", {
       method: "POST",
       token,
+    }),
+
+  forgotPassword: (email: string, tenantSlug: string) =>
+    apiFetch<{ message: string }>("/api/v1/auth/forgot-password", {
+      method: "POST",
+      body: { email },
+      tenantId: tenantSlug,
+    }),
+
+  resetPassword: (token: string, password: string, tenantSlug: string) =>
+    apiFetch<{ message: string }>("/api/v1/auth/reset-password", {
+      method: "POST",
+      body: { token, password },
+      tenantId: tenantSlug,
     }),
 };
 

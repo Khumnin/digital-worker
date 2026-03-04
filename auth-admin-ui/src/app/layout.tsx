@@ -1,20 +1,15 @@
 import type { Metadata } from "next";
-import { Poppins, Noto_Sans_Thai } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/auth";
 import "./globals.css";
 
-const poppins = Poppins({
-  variable: "--font-poppins",
+const plusJakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta-sans",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const notoSansThai = Noto_Sans_Thai({
-  variable: "--font-noto-sans-thai",
-  subsets: ["thai"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["300", "500", "600"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -26,10 +21,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="th">
-      <body
-        className={`${poppins.variable} ${notoSansThai.variable} antialiased`}
-      >
+    <html lang="th" className={plusJakartaSans.variable}>
+      <body className="antialiased">
         <AuthProvider>
           <TooltipProvider>
             {children}

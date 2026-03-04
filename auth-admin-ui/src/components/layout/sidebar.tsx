@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -27,6 +28,7 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
   superAdminOnly?: boolean;
+  adminOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -48,24 +50,34 @@ const NAV_ITEMS: NavItem[] = [
     labelTh: "ผู้ใช้งาน",
     href: "/dashboard/users",
     icon: Users,
+    adminOnly: true,
   },
   {
     label: "Roles",
     labelTh: "บทบาท",
     href: "/dashboard/roles",
     icon: ShieldCheck,
+    adminOnly: true,
   },
   {
     label: "Audit Log",
     labelTh: "ประวัติการใช้งาน",
     href: "/dashboard/audit",
     icon: ScrollText,
+    adminOnly: true,
   },
   {
     label: "Settings",
     labelTh: "ตั้งค่า",
     href: "/dashboard/settings",
     icon: Settings,
+    adminOnly: true,
+  },
+  {
+    label: "My Profile",
+    labelTh: "โปรไฟล์",
+    href: "/me",
+    icon: UserCircle,
   },
 ];
 
@@ -76,7 +88,7 @@ interface SidebarProps {
 export function Sidebar({ lang }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isSuperAdmin, logout } = useAuth();
+  const { isSuperAdmin, isAdmin, logout } = useAuth();
   const [expanded, setExpanded] = useState(true);
 
   useEffect(() => {
@@ -96,9 +108,11 @@ export function Sidebar({ lang }: SidebarProps) {
     router.push("/login");
   };
 
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.superAdminOnly || isSuperAdmin
-  );
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (item.superAdminOnly && !isSuperAdmin) return false;
+    if (item.adminOnly && !isAdmin) return false;
+    return true;
+  });
 
   return (
     <aside
@@ -116,13 +130,10 @@ export function Sidebar({ lang }: SidebarProps) {
       >
         {/* Tiger Red logo mark */}
         <div className="w-8 h-8 rounded-full bg-tiger-red flex items-center justify-center shrink-0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M12 2L3 7V17L12 22L21 17V7L12 2Z"
-              stroke="white"
-              strokeWidth="2.5"
-              strokeLinejoin="round"
-            />
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <line x1="3" y1="14" x2="10" y2="3" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+            <line x1="7" y1="15" x2="14" y2="4" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+            <line x1="11" y1="15" x2="18" y2="4" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.7"/>
           </svg>
         </div>
         {expanded && (

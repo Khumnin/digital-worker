@@ -25,6 +25,7 @@ func NewAdminHandler(svc service.AdminService) *AdminHandler {
 type inviteUserRequest struct {
 	Email       string `json:"email"        validate:"required,email"`
 	DisplayName string `json:"display_name" validate:"required,min=1,max=200"`
+	InitialRole string `json:"initial_role"` // optional; defaults to "user" if omitted
 }
 
 // InviteUser handles POST /api/v1/admin/users/invite.
@@ -42,7 +43,7 @@ func (h *AdminHandler) InviteUser(c *gin.Context) {
 
 	// Pass the full display_name as firstName; lastName is left empty so that
 	// domain.User.FullName() returns the display_name verbatim.
-	user, err := h.adminSvc.InviteUser(c.Request.Context(), req.Email, req.DisplayName, "")
+	user, err := h.adminSvc.InviteUser(c.Request.Context(), req.Email, req.DisplayName, "", req.InitialRole)
 	if err != nil {
 		respondWithServiceError(c, err)
 		return

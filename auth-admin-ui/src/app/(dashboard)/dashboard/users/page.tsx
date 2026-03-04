@@ -68,7 +68,7 @@ const MODULE_OPTIONS = [
 
 export default function UsersPage() {
   const router = useRouter();
-  const { getToken } = useAuth();
+  const { getToken, isAdmin } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -76,6 +76,7 @@ export default function UsersPage() {
   const [moduleFilter, setModuleFilter] = useState<string>("all");
   const [showInvite, setShowInvite] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [inviteRole, setInviteRole] = useState<"admin" | "user">("user");
   const [form, setForm] = useState<InviteUserRequest>({
     email: "",
     display_name: "",
@@ -105,10 +106,11 @@ export default function UsersPage() {
     try {
       const token = await getToken();
       if (!token) return;
-      await userApi.invite(form, token);
+      await userApi.invite({ ...form, initial_role: inviteRole }, token);
       toast.success(`Invitation sent to ${form.email}`);
       setShowInvite(false);
       setForm({ email: "", display_name: "" });
+      setInviteRole("user");
       await load();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to invite user");
@@ -227,13 +229,15 @@ export default function UsersPage() {
           </Button>
         )}
 
-        <Button
-          onClick={() => setShowInvite(true)}
-          className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-sm h-10 px-4 ml-auto"
-        >
-          <Plus size={16} className="mr-1.5" />
-          Invite User
-        </Button>
+        {isAdmin && (
+          <Button
+            onClick={() => setShowInvite(true)}
+            className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-sm h-10 px-4 ml-auto"
+          >
+            <Plus size={16} className="mr-1.5" />
+            Invite User
+          </Button>
+        )}
       </div>
 
       {/* Table */}
@@ -328,14 +332,14 @@ export default function UsersPage() {
                         >
                           View details
                         </DropdownMenuItem>
-                        {user.status === "pending" && (
+                        {isAdmin && user.status === "pending" && (
                           <DropdownMenuItem
                             onClick={() => handleResendInvite(user.id)}
                           >
                             Resend Invite
                           </DropdownMenuItem>
                         )}
-                        {user.status === "active" && (
+                        {isAdmin && user.status === "active" && (
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
                             onClick={() => handleSuspend(user.id)}
@@ -383,8 +387,19 @@ export default function UsersPage() {
                 className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11"
               />
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-semi-black">Role</Label>
+              <select
+                value={inviteRole}
+                onChange={e => setInviteRole(e.target.value as "admin" | "user")}
+                className="w-full h-12 rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] px-4 text-sm text-semi-black"
+              >
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
             <p className="text-xs text-semi-grey">
-              Roles can be assigned after the user accepts their invitation.
+              Additional roles can be assigned after the user accepts their invitation.
             </p>
             <DialogFooter className="pt-2">
               <Button

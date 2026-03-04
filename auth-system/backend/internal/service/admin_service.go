@@ -28,7 +28,7 @@ type UserWithRoles struct {
 // AdminService exposes privileged user-management operations reserved for
 // tenant administrators.
 type AdminService interface {
-	InviteUser(ctx context.Context, email, firstName, lastName string) (*domain.User, error)
+	InviteUser(ctx context.Context, email, firstName, lastName, initialRole string) (*domain.User, error)
 	// ResendInvite re-sends the invitation email for an unverified user.
 	// Only works when the user status is unverified; returns ErrUserNotFound
 	// or a descriptive error for any other state.
@@ -104,7 +104,7 @@ const invitationTTL = 7 * 24 * time.Hour
 //   - Unverified email   → re-send invite (previous token still valid; new one supersedes it).
 //   - Disabled email     → re-enable account (→ unverified) and re-send invite.
 //   - Active / deleted   → return ErrEmailAlreadyExists.
-func (s *adminServiceImpl) InviteUser(ctx context.Context, email, firstName, lastName string) (*domain.User, error) {
+func (s *adminServiceImpl) InviteUser(ctx context.Context, email, firstName, lastName, initialRole string) (*domain.User, error) {
 	normalized, err := domain.NormalizeEmail(email)
 	if err != nil {
 		return nil, domain.ErrInvalidEmail
@@ -152,6 +152,28 @@ func (s *adminServiceImpl) InviteUser(ctx context.Context, email, firstName, las
 			return nil, fmt.Errorf("create invited user: %w", createErr)
 		}
 		user = created
+	}
+
+	// Assign initial role if provided; defaults to "user".
+	// Only "user" and "admin" are permitted — "super_admin" is never granted via invite.
+	roleName := initialRole
+	if roleName == "" {
+		roleName = "user"
+	}
+	if roleName != "user" && roleName != "admin" {
+		roleName = "user"
+	}
+	role, roleErr := s.roleRepo.FindByName(ctx, roleName)
+	if roleErr == nil && role != nil {
+		// Replace all current roles with this single initial role.
+		// Failure is non-fatal — the invite proceeds regardless.
+		if assignErr := s.roleRepo.ReplaceUserRoles(ctx, user.ID, []uuid.UUID{role.ID}); assignErr != nil {
+			slog.Error("invite: failed to assign initial role",
+				"user_id", user.ID, "role", roleName, "error", assignErr)
+		}
+	} else if roleErr != nil {
+		slog.Error("invite: initial role not found, skipping assignment",
+			"role", roleName, "error", roleErr)
 	}
 
 	rawToken, tokenHash, err := crypto.GenerateTokenWithHash()
