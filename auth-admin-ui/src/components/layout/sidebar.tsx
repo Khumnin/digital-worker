@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
@@ -128,14 +129,14 @@ export function Sidebar({ lang }: SidebarProps) {
           !expanded && "justify-center"
         )}
       >
-        {/* Tiger Red logo mark */}
-        <div className="w-8 h-8 rounded-full bg-tiger-red flex items-center justify-center shrink-0">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <line x1="3" y1="14" x2="10" y2="3" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-            <line x1="7" y1="15" x2="14" y2="4" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-            <line x1="11" y1="15" x2="18" y2="4" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.7"/>
-          </svg>
-        </div>
+        {/* TigerSoft Logo Mark */}
+        <Image
+          src="/logo-mark.svg"
+          alt="TigerSoft"
+          width={32}
+          height={32}
+          className="shrink-0"
+        />
         {expanded && (
           <span className="ml-3 text-sm font-semibold text-semi-black truncate">
             TGX Auth Console

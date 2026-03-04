@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,13 +51,14 @@ export default function LoginPage() {
       <div className="w-full max-w-[440px] bg-white rounded-[10px] p-10 shadow-sm">
         {/* Logo / Brand */}
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-tiger-red mb-4">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <line x1="3" y1="14" x2="10" y2="3" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-              <line x1="7" y1="15" x2="14" y2="4" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-              <line x1="11" y1="15" x2="18" y2="4" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.7"/>
-            </svg>
-          </div>
+          <Image
+            src="/logo-mark.svg"
+            alt="TigerSoft"
+            width={56}
+            height={56}
+            className="mx-auto mb-4"
+            priority
+          />
           <h1 className="text-xl font-semibold text-semi-black">
             TGX Auth Console
           </h1>

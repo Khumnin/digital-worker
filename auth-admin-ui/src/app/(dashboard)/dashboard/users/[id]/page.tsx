@@ -167,7 +167,7 @@ export default function UserDetailPage() {
   }
 
   const statusColor: Record<string, string> = {
-    active: "bg-green-100 text-green-700 border-green-200",
+    active: "bg-[#EDFBF5] text-[#34D186] border-[#34D186]/40",
     inactive: "bg-gray-100 text-semi-grey border-gray-200",
     pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
   };

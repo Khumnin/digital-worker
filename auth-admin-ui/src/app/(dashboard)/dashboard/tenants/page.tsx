@@ -139,7 +139,7 @@ export default function TenantsPage() {
   );
 
   const statusColor: Record<string, string> = {
-    active: "bg-green-100 text-green-700 border-green-200",
+    active: "bg-[#EDFBF5] text-[#34D186] border-[#34D186]/40",
     suspended: "bg-red-100 text-tiger-red border-red-200",
     pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
   };

@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2, CheckCircle2 } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -79,12 +80,14 @@ function AcceptInviteForm() {
       <div className="w-full max-w-[440px] bg-white rounded-[10px] p-10 shadow-sm">
         {/* Brand */}
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-tiger-red mb-4">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L3 7V17L12 22L21 17V7L12 2Z" stroke="white" strokeWidth="2" strokeLinejoin="round" />
-              <path d="M12 2V22M3 7L21 17M21 7L3 17" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </div>
+          <Image
+            src="/logo-mark.svg"
+            alt="TigerSoft"
+            width={56}
+            height={56}
+            className="mx-auto mb-4"
+            priority
+          />
           <h1 className="text-xl font-semibold text-semi-black">
             Set up your account
           </h1>
