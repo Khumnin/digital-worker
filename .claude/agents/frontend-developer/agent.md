@@ -99,6 +99,66 @@ Always produce:
 | Zustand stores | `useXxxStore` (`useAuthStore`) |
 | React Query keys | arrays, descriptive (`['users', id]`) |
 
+## TigerSoft Branding CI (MANDATORY)
+
+> Full reference: `guide/BRANDING.md` — **READ this file before starting any UI work.**
+
+All UI output **MUST** comply with the TigerSoft Corporate Identity. Non-compliant designs will be rejected at QA gate.
+
+### Brand Colors
+
+| Token | Name | HEX | Usage |
+|---|---|---|---|
+| `--color-primary-red` | Vivid Red | `#F4001A` | CTA buttons, accents, brand highlights |
+| `--color-primary-white` | White | `#FFFFFF` | Backgrounds, cards, content areas |
+| `--color-primary-blue` | Oxford Blue | `#0B1F3A` | Headings, body text, dark sections |
+| `--color-secondary-silver` | Quick Silver | `#A3A3A3` | Borders, dividers, disabled states |
+| `--color-secondary-serene` | Serene | `#DBE1E1` | Light backgrounds, subtle UI |
+| `--color-secondary-green` | UFO Green | `#34D186` | Success states, positive actions |
+
+**Color ratio:** Primary 85% (Red 20%, White 45%, Blue 20%) / Secondary 15% (5% each)
+
+### Typography
+- **English:** `Plus Jakarta Sans` (Google Fonts) — Heading: Medium, Body: Light
+- **Thai:** `FC Vision` (custom, load from `guide/CI Toolkit/Font/`) — Heading: Medium, Body: Light
+
+### Tailwind CSS Integration
+Configure `tailwind.config.ts` to extend the brand tokens:
+```ts
+// tailwind.config.ts — extend with TigerSoft CI colors
+theme: {
+  extend: {
+    colors: {
+      brand: {
+        red: '#F4001A',
+        blue: '#0B1F3A',
+        silver: '#A3A3A3',
+        serene: '#DBE1E1',
+        green: '#34D186',
+      }
+    },
+    fontFamily: {
+      sans: ['Plus Jakarta Sans', 'FC Vision', 'sans-serif'],
+    },
+    borderRadius: {
+      card: '12px',   // soft edges for cards
+      input: '8px',   // soft edges for inputs
+      button: '8px',  // soft edges for buttons
+    }
+  }
+}
+```
+
+### UI Design Rules (from CI Toolkit)
+- **No pure black (#000)** — always use Oxford Blue `#0B1F3A` for text
+- **Vivid Red for primary CTAs** — buttons, links, active states
+- **Soft edges everywhere** — rounded corners on all cards, buttons, inputs
+- **White-dominant layout** — 45% white space, clean and professional
+- **UFO Green for success only** — confirmations, success toasts, positive indicators
+- **Grid-based layout** — consistent spacing via Tailwind grid/flex
+- **Glassmorphism sparingly** — frosted glass effect only for hero/featured sections
+- **Logo:** use original files from `guide/Logo Tigersoft 5/` — never recreate or modify
+
 ## Principles
 
 - UI is a function of state — model state first, render second
@@ -106,3 +166,4 @@ Always produce:
 - Performance budgets: LCP < 2.5s, CLS < 0.1, bundle < 200kb initial JS
 - Test user behavior, not implementation — `getByRole`, not `getByTestId`
 - Optimistic UI for mutations — users should never wait for confirmations
+- **Every UI must align with TigerSoft Branding CI** — read `guide/BRANDING.md` before coding

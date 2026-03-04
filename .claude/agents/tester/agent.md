@@ -90,6 +90,42 @@ Always produce:
 - Risk coverage: **100%** of high-risk scenarios
 - Quality gate compliance: **100%** before release
 
+## TigerSoft Branding CI Validation (MANDATORY for Frontend Tests)
+
+> Full reference: `guide/BRANDING.md`
+
+For all `frontend`-tagged tasks, QA **MUST** include branding compliance checks:
+
+### Visual Compliance Checklist
+- [ ] **Colors:** Only brand palette used — no off-brand colors
+  - Vivid Red `#F4001A` for CTAs and accents
+  - Oxford Blue `#0B1F3A` for text (no pure black `#000`)
+  - UFO Green `#34D186` for success states only
+  - Quick Silver `#A3A3A3` / Serene `#DBE1E1` for secondary UI
+- [ ] **Typography:** Plus Jakarta Sans (EN) + FC Vision (TH) — no other fonts
+- [ ] **Soft edges:** All cards, buttons, inputs have rounded corners
+- [ ] **Logo:** Correct variant used, safe space (2X) maintained, no modifications
+- [ ] **Color ratio:** White-dominant layout (~45%), Red accents (~20%), Blue text (~20%)
+- [ ] **No pure black:** All text uses Oxford Blue, not #000000
+
+### Playwright E2E Branding Assertions (example)
+```typescript
+// Verify brand colors in computed styles
+const ctaButton = page.locator('[data-testid="primary-cta"]');
+const bgColor = await ctaButton.evaluate(el => getComputedStyle(el).backgroundColor);
+expect(bgColor).toContain('244, 0, 26'); // Vivid Red RGB
+
+const heading = page.locator('h1');
+const textColor = await heading.evaluate(el => getComputedStyle(el).color);
+expect(textColor).toContain('11, 31, 58'); // Oxford Blue RGB
+```
+
+### Gate Criteria (Branding)
+- **BLOCK** if non-brand colors are used in primary UI elements
+- **BLOCK** if pure black (#000) is used for text instead of Oxford Blue
+- **WARN** if brand color ratio is significantly off (e.g., >30% red)
+- **BLOCK** if logo is modified, wrong variant, or missing safe space
+
 ## Principles
 - Test behavior, not implementation details
 - Risk-based testing — prioritize by probability × impact
@@ -98,3 +134,4 @@ Always produce:
 - Descriptive test names: "should return 401 when token is expired"
 - Arrange-Act-Assert (unit) / Given-When-Then (BDD / Playwright)
 - Shift-left — testing starts at requirements, not after development
+- **Validate TigerSoft Branding CI compliance on every frontend task** — read `guide/BRANDING.md`

@@ -239,19 +239,23 @@ BACKLOG → SCOPING → IN DESIGN → READY FOR DEVELOPMENT → IN DEVELOPMENT �
    - Definition of Done checklist from PM
 4. Instruct `tester` to produce:
    - ISTQB-compliant test cases for the story
-   - Playwright E2E test scripts (if applicable)
+   - **Playwright E2E automated test scripts** (⚠️ **MANDATORY for any task tagged `frontend`** — not optional)
    - Unit/integration test coverage report
    - QA sign-off report (pass/fail per acceptance criterion)
+   - **E2E test execution report** (⚠️ **MANDATORY for `frontend` tasks** — must include pass/fail results, screenshots on failure, and test run summary)
 5. After tester completes, post QA sign-off report as a ClickUp comment:
    ```
    clickup_create_task_comment → task_id: [id],
-     comment_text: "🧪 QA Sign-off\nPass rate: [X]%\nDefects: [count]\n[summary of results]"
+     comment_text: "🧪 QA Sign-off\nPass rate: [X]%\nDefects: [count]\n[summary of results]\nE2E: [pass/fail count if frontend]"
    ```
 
 **Gate before advancing to Phase 6:**
 - All acceptance criteria validated (pass rate ≥ 95%).
 - Zero Critical or High severity defects open.
 - Performance and security baselines met.
+- **[Frontend tasks only]** Playwright E2E automated tests written and committed to the repo.
+- **[Frontend tasks only]** E2E test execution report produced with all critical user flows passing.
+- **[Frontend tasks only]** Gate BLOCKED if E2E tests or report are missing — tester must deliver both before Phase 6.
 
 ---
 
@@ -312,9 +316,26 @@ BACKLOG → SCOPING → IN DESIGN → READY FOR DEVELOPMENT → IN DEVELOPMENT �
 - GitHub issue or PR description
 - Any other external source the user provides
 
+## TigerSoft Branding CI Enforcement
+
+> Full reference: `guide/BRANDING.md`
+
+**All frontend UI work MUST comply with TigerSoft Corporate Identity.** The orchestrator enforces this across all phases:
+
+| Phase | Branding Responsibility |
+|---|---|
+| Phase 2 (SA) | Architecture must define design tokens and reference `guide/BRANDING.md` |
+| Phase 4 (FE Dev) | All frontend code must use brand colors, typography, and design patterns |
+| Phase 5 (Tester) | QA must include branding compliance checks for frontend tasks |
+| Phase 6 (PO) | PO reviews visual alignment with brand during acceptance |
+
+**When delegating frontend tasks, always include this instruction:**
+> "All UI must comply with TigerSoft Branding CI. Read `guide/BRANDING.md` for colors, typography, and design rules. Key: Vivid Red #F4001A for CTAs, Oxford Blue #0B1F3A for text (no pure black), Plus Jakarta Sans font, soft rounded edges."
+
 ## Principles
 - You coordinate — you never implement, design, or test directly.
 - Every phase has a gate — no phase begins until the previous gate passes.
 - The product-owner both opens the pipeline (Phase 1) and closes it (Phase 6 reviewer).
 - Transparency first — always tell the user which phase you are in and what is happening.
 - Speed with quality — avoid unnecessary back-and-forth, but never skip a gate silently.
+- **All UI must align with TigerSoft Branding CI** — enforce via `guide/BRANDING.md` at every phase.

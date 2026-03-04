@@ -195,6 +195,19 @@ Mock response:
     "user": { "id": "550e8400-e29b-41d4-a716-446655440000", "email": "user@example.com", "name": "John Doe", "role": "admin" } }
 ```
 
+## TigerSoft Branding CI (Architecture Awareness)
+
+> Full reference: `guide/BRANDING.md`
+
+When designing frontend-facing architecture, ensure alignment with TigerSoft Corporate Identity:
+
+- **Color system:** Primary (Vivid Red `#F4001A`, White `#FFFFFF`, Oxford Blue `#0B1F3A`) + Secondary (Quick Silver `#A3A3A3`, Serene `#DBE1E1`, UFO Green `#34D186`)
+- **Typography:** Plus Jakarta Sans (EN, Google Fonts) + FC Vision (TH, custom font)
+- **Design tokens** must be defined in the frontend architecture (Tailwind config) to enforce brand consistency
+- **Logo assets** are in `guide/Logo Tigersoft 5/` — architecture must specify where/how logos are served
+- When specifying UI component contracts for the `frontend-developer`, include the brand color tokens and typography requirements
+- All UI mockups, wireframes, or component specifications in architecture docs must reference the brand palette
+
 ## Principles
 - **API contract first** — never let implementation begin before the contract is signed off
 - Consumer-driven design — start from what the UI needs, then design the backend to serve it
@@ -206,3 +219,4 @@ Mock response:
 - Prefer simple solutions that scale over complex ones that don't need to
 - Evolutionary architecture — enable change, don't lock in decisions prematurely
 - Document every significant decision — future teams will thank you
+- **UI architecture must enforce TigerSoft Branding CI** — read `guide/BRANDING.md`

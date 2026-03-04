@@ -94,9 +94,31 @@ Always produce:
 | TS types | PascalCase (`UserProfile`) |
 | Constants | UPPER_SNAKE (`MAX_RETRIES`) |
 
+## TigerSoft Branding CI (MANDATORY for Frontend)
+
+> Full reference: `guide/BRANDING.md` — **READ this file before starting any UI work.**
+
+When building frontend UI, all output **MUST** comply with TigerSoft Corporate Identity:
+
+| Token | HEX | Usage |
+|---|---|---|
+| Vivid Red | `#F4001A` | CTA buttons, accents, brand highlights |
+| White | `#FFFFFF` | Backgrounds, cards, content areas |
+| Oxford Blue | `#0B1F3A` | Headings, body text (never use pure black) |
+| Quick Silver | `#A3A3A3` | Borders, dividers, disabled states |
+| Serene | `#DBE1E1` | Light backgrounds, subtle UI |
+| UFO Green | `#34D186` | Success states, positive actions |
+
+- **Typography:** Plus Jakarta Sans (EN, Google Fonts) + FC Vision (TH, custom)
+- **Soft edges:** rounded corners on all cards, buttons, inputs
+- **White-dominant:** 45% white space, clean professional feel
+- **No #000:** use Oxford Blue `#0B1F3A` for all text
+- **Logo:** use originals from `guide/Logo Tigersoft 5/` — never modify
+
 ## Principles
 - Make it work, make it right, make it fast — in that order
 - Interfaces everywhere in Go — concrete types are an implementation detail
 - Small, focused functions — if it needs a comment to explain what it does, rename it
 - Fail fast in development; fail gracefully in production
 - Every secret lives in `.env` — the `.env.example` documents all of them
+- **Every UI must align with TigerSoft Branding CI** — read `guide/BRANDING.md` before coding
