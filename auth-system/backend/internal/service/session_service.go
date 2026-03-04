@@ -31,6 +31,7 @@ type sessionServiceImpl struct {
 	userRepo       domain.UserRepository
 	sessionRepo    domain.SessionRepository
 	auditRepo      domain.AuditRepository
+	roleRepo       domain.RoleRepository
 	keyStore       jwtutil.Signer
 	accessTokenTTL time.Duration
 }
@@ -40,6 +41,7 @@ func NewSessionService(
 	userRepo domain.UserRepository,
 	sessionRepo domain.SessionRepository,
 	auditRepo domain.AuditRepository,
+	roleRepo domain.RoleRepository,
 	keyStore jwtutil.Signer,
 	accessTokenTTL time.Duration,
 ) SessionService {
@@ -47,6 +49,7 @@ func NewSessionService(
 		userRepo:       userRepo,
 		sessionRepo:    sessionRepo,
 		auditRepo:      auditRepo,
+		roleRepo:       roleRepo,
 		keyStore:       keyStore,
 		accessTokenTTL: accessTokenTTL,
 	}
@@ -105,12 +108,17 @@ func (s *sessionServiceImpl) Refresh(
 	// Read the tenant slug from context (set by RequireTenant middleware).
 	tenantSlug, _ := ctx.Value(pgdb.CtxKeyTenantID).(string)
 
+	// Resolve the user's current roles for the new access token.
+	systemRoles, moduleRoles := resolveRoles(ctx, s.roleRepo, user.ID)
+
 	// Issue a new JWT access token.
 	accessToken, err := s.keyStore.Sign(jwtutil.Claims{
-		Subject:  user.ID.String(),
-		TenantID: tenantSlug,
-		Roles:    []string{"user"},
-		TTL:      s.accessTokenTTL,
+		Subject:     user.ID.String(),
+		Email:       user.Email,
+		TenantID:    tenantSlug,
+		Roles:       systemRoles,
+		ModuleRoles: moduleRoles,
+		TTL:         s.accessTokenTTL,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("sign access token: %w", err)

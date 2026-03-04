@@ -29,8 +29,8 @@ export function Header({ lang, onLangChange, title }: HeaderProps) {
   };
 
   const initials =
-    user
-      ? `${user.email.charAt(0).toUpperCase()}`
+    user?.email
+      ? user.email.charAt(0).toUpperCase()
       : "?";
 
   return (

@@ -17,6 +17,7 @@ import (
 
 type Claims struct {
 	Subject     string
+	Email       string
 	TenantID    string
 	Roles       []string
 	ModuleRoles map[string][]string
@@ -28,6 +29,7 @@ type Claims struct {
 type ParsedClaims struct {
 	ID          string
 	Subject     string
+	Email       string
 	TenantID    string
 	Roles       []string
 	ModuleRoles map[string][]string
@@ -39,6 +41,7 @@ type ParsedClaims struct {
 
 type jwtClaims struct {
 	jwt.RegisteredClaims
+	Email       string              `json:"email,omitempty"`
 	TenantID    string              `json:"tenant_id"`
 	Roles       []string            `json:"roles,omitempty"`
 	ModuleRoles map[string][]string `json:"module_roles,omitempty"`
@@ -138,6 +141,7 @@ func (ks *KeyStore) Sign(claims Claims) (string, error) {
 
 	internal := jwtClaims{
 		RegisteredClaims: registered,
+		Email:            claims.Email,
 		TenantID:         claims.TenantID,
 		Roles:            claims.Roles,
 		ModuleRoles:      claims.ModuleRoles,
@@ -194,6 +198,7 @@ func (ks *KeyStore) Verify(tokenString string) (*ParsedClaims, error) {
 	return &ParsedClaims{
 		ID:          internal.ID,
 		Subject:     internal.Subject,
+		Email:       internal.Email,
 		TenantID:    internal.TenantID,
 		Roles:       internal.Roles,
 		ModuleRoles: internal.ModuleRoles,
