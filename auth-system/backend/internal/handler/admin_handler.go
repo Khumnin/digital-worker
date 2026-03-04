@@ -77,8 +77,46 @@ func (h *AdminHandler) ResendInvite(c *gin.Context) {
 
 // DisableUser handles POST /api/v1/admin/users/:id/disable.
 // Prevents the user from logging in without permanently deleting their data.
+// Guards:
+//  1. An admin cannot suspend themselves.
+//  2. A non-super_admin cannot suspend a super_admin.
 func (h *AdminHandler) DisableUser(c *gin.Context) {
 	userID := c.Param("id")
+
+	claimsVal, _ := c.Get("jwt_claims")
+	claims := claimsVal.(middleware.JWTClaims)
+
+	// Guard 1: cannot suspend yourself.
+	if claims.UserID == userID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]string{
+			"code":    "CANNOT_SUSPEND_SELF",
+			"message": "You cannot suspend your own account.",
+		}})
+		return
+	}
+
+	// Guard 2: only super_admin can suspend another super_admin.
+	actorIsSuperAdmin := false
+	for _, r := range claims.Roles {
+		if r == "super_admin" {
+			actorIsSuperAdmin = true
+			break
+		}
+	}
+	if !actorIsSuperAdmin {
+		target, err := h.adminSvc.GetUser(c.Request.Context(), userID)
+		if err == nil {
+			for _, r := range target.SystemRoles {
+				if r == "super_admin" {
+					c.JSON(http.StatusForbidden, gin.H{"error": map[string]string{
+						"code":    "CANNOT_SUSPEND_SUPER_ADMIN",
+						"message": "Only a super admin can suspend another super admin.",
+					}})
+					return
+				}
+			}
+		}
+	}
 
 	if err := h.adminSvc.DisableUser(c.Request.Context(), userID); err != nil {
 		respondWithServiceError(c, err)
