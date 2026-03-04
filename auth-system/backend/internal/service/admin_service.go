@@ -3,6 +3,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -92,23 +93,61 @@ func WithTokenRepo(svc AdminService, tokenRepo domain.TokenRepository) AdminServ
 // invitationTTL is the validity window for admin-issued invitation links.
 const invitationTTL = 7 * 24 * time.Hour
 
-// InviteUser creates an unverified user account, generates a verification
-// token, and sends an invitation email.
+// InviteUser creates a new unverified user account, or re-sends the invitation
+// if the email already exists with a re-invitable status (unverified or disabled).
+//
+//   - New email          → create user, send invite.
+//   - Unverified email   → re-send invite (previous token still valid; new one supersedes it).
+//   - Disabled email     → re-enable account (→ unverified) and re-send invite.
+//   - Active / deleted   → return ErrEmailAlreadyExists.
 func (s *adminServiceImpl) InviteUser(ctx context.Context, email, firstName, lastName string) (*domain.User, error) {
 	normalized, err := domain.NormalizeEmail(email)
 	if err != nil {
 		return nil, domain.ErrInvalidEmail
 	}
 
-	user, err := s.userRepo.Create(ctx, domain.CreateUserInput{
-		Email:        normalized,
-		PasswordHash: "",
-		FirstName:    firstName,
-		LastName:     lastName,
-		Status:       domain.UserStatusUnverified,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create invited user: %w", err)
+	// Check whether an account with this email already exists.
+	existing, lookupErr := s.userRepo.FindByEmail(ctx, normalized)
+	if lookupErr != nil && !errors.Is(lookupErr, domain.ErrUserNotFound) {
+		return nil, fmt.Errorf("lookup email for invite: %w", lookupErr)
+	}
+
+	var user *domain.User
+
+	if existing != nil {
+		switch existing.Status {
+		case domain.UserStatusUnverified:
+			// Account created but invitation never accepted — just resend.
+			user = existing
+
+		case domain.UserStatusDisabled:
+			// Admin-suspended account; re-inviting re-enables it.
+			unverified := domain.UserStatusUnverified
+			updated, updateErr := s.userRepo.Update(ctx, existing.ID, domain.UpdateUserInput{
+				Status: &unverified,
+			})
+			if updateErr != nil {
+				return nil, fmt.Errorf("re-enable user for re-invite: %w", updateErr)
+			}
+			user = updated
+
+		default:
+			// Active, deleted, or any other status — cannot overwrite.
+			return nil, domain.ErrEmailAlreadyExists
+		}
+	} else {
+		// Brand-new email — create the account.
+		created, createErr := s.userRepo.Create(ctx, domain.CreateUserInput{
+			Email:        normalized,
+			PasswordHash: "",
+			FirstName:    firstName,
+			LastName:     lastName,
+			Status:       domain.UserStatusUnverified,
+		})
+		if createErr != nil {
+			return nil, fmt.Errorf("create invited user: %w", createErr)
+		}
+		user = created
 	}
 
 	rawToken, tokenHash, err := crypto.GenerateTokenWithHash()
