@@ -68,7 +68,14 @@ const MODULE_OPTIONS = [
 
 export default function UsersPage() {
   const router = useRouter();
-  const { getToken, isAdmin } = useAuth();
+  const { getToken, isAdmin, isSuperAdmin, user: authUser } = useAuth();
+
+  // Suspend is allowed only when: actor is admin, target is not self,
+  // and target is not a super_admin (unless the actor is also super_admin).
+  const canSuspend = (u: User) =>
+    isAdmin &&
+    u.id !== authUser?.sub &&
+    (!u.system_roles?.includes("super_admin") || isSuperAdmin);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -339,7 +346,7 @@ export default function UsersPage() {
                             Resend Invite
                           </DropdownMenuItem>
                         )}
-                        {isAdmin && user.status === "active" && (
+                        {canSuspend(user) && user.status === "active" && (
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
                             onClick={() => handleSuspend(user.id)}

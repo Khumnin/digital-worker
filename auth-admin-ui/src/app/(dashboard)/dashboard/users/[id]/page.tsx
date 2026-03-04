@@ -14,7 +14,7 @@ import { userApi, roleApi, authApi, type User, type Role, ApiError } from "@/lib
 export default function UserDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { getToken, isAdmin, tenantSlug } = useAuth();
+  const { getToken, isAdmin, isSuperAdmin, tenantSlug, user: authUser } = useAuth();
   const [user, setUser] = useState<User | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
@@ -229,7 +229,10 @@ export default function UserDetailPage() {
               Send Password Reset
             </Button>
           )}
-          {isAdmin && user.status === "active" && (
+          {isAdmin &&
+            user.status === "active" &&
+            user.id !== authUser?.sub &&
+            (!user.system_roles?.includes("super_admin") || isSuperAdmin) && (
             <Button
               variant="outline"
               size="sm"
