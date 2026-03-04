@@ -101,15 +101,27 @@ func (h *AdminHandler) EnableUser(c *gin.Context) {
 }
 
 // normalizeUserStatus maps internal DB status values to the API contract values.
-// "invited"  → "pending"   (user invited but has not set a password yet)
-// "disabled" → "inactive"  (admin-disabled account)
-// All other values (active, unverified, deleted) pass through unchanged.
+// "unverified" → "pending"   (user invited but has not set a password yet)
+// "disabled"   → "inactive"  (admin-disabled account)
+// All other values pass through unchanged.
 func normalizeUserStatus(status string) string {
 	switch status {
-	case "invited":
+	case "unverified":
 		return "pending"
 	case "disabled":
 		return "inactive"
+	default:
+		return status
+	}
+}
+
+// denormalizeUserStatus maps API status values back to internal DB values for filtering.
+func denormalizeUserStatus(status string) string {
+	switch status {
+	case "pending":
+		return "unverified"
+	case "inactive":
+		return "disabled"
 	default:
 		return status
 	}

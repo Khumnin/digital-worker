@@ -86,19 +86,14 @@ export default function UsersPage() {
     try {
       const token = await getToken();
       if (!token) return;
-      const params: { page_size: number; status?: string; module?: string } = {
-        page_size: 100,
-      };
-      if (statusFilter !== "all") params.status = statusFilter;
-      if (moduleFilter !== "all") params.module = moduleFilter;
-      const usersResult = await userApi.list(token, params);
+      const usersResult = await userApi.list(token, { page_size: 100 });
       setUsers(usersResult.data);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to load users");
     } finally {
       setLoading(false);
     }
-  }, [getToken, statusFilter, moduleFilter]);
+  }, [getToken]);
 
   useEffect(() => {
     load();
@@ -152,16 +147,16 @@ export default function UsersPage() {
 
   const hasActiveFilters = statusFilter !== "all" || moduleFilter !== "all";
 
-  // Client-side search filter (status/module filtered server-side via params)
+  // Client-side filters (backend returns all users; we filter here)
   const filtered = users.filter((u) => {
     const matchSearch =
       u.email.toLowerCase().includes(search.toLowerCase()) ||
       (u.display_name ?? "").toLowerCase().includes(search.toLowerCase());
-    // If module filter is active and backend doesn't support it, filter client-side too
+    const matchStatus = statusFilter === "all" || u.status === statusFilter;
     const matchModule =
       moduleFilter === "all" ||
       Object.keys(u.module_roles ?? {}).includes(moduleFilter);
-    return matchSearch && matchModule;
+    return matchSearch && matchStatus && matchModule;
   });
 
   const statusColor: Record<string, string> = {
