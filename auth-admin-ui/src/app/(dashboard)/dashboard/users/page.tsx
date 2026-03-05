@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -11,6 +11,7 @@ import {
   Users as UsersIcon,
   X,
   Mail,
+  Filter,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +79,10 @@ export default function UsersPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [moduleFilter, setModuleFilter] = useState<string>("all");
   const [showInvite, setShowInvite] = useState(false);
+  // Tracks whether the user just clicked the pending banner so we can show a
+  // transitional "Filtering..." state instead of abruptly hiding the banner.
+  const [pendingBannerApplying, setPendingBannerApplying] = useState(false);
+  const bannerApplyingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,6 +119,13 @@ export default function UsersPage() {
       toast.error(err instanceof ApiError ? err.message : "Failed to load users");
     } finally {
       setLoading(false);
+      // Banner transition complete — clear the "applying" state regardless of
+      // whether the fetch succeeded or failed.
+      setPendingBannerApplying(false);
+      if (bannerApplyingTimerRef.current) {
+        clearTimeout(bannerApplyingTimerRef.current);
+        bannerApplyingTimerRef.current = null;
+      }
     }
   }, [getToken, statusFilter]);
 
@@ -144,6 +156,18 @@ export default function UsersPage() {
     }
   }
 
+  function handlePendingBannerClick() {
+    // Mark the transition as "applying" immediately so the banner transforms
+    // into a loading state rather than vanishing before results arrive.
+    setPendingBannerApplying(true);
+    // Safety valve: if the network is very slow, clear the applying state after
+    // 8 s so the banner doesn't persist indefinitely.
+    bannerApplyingTimerRef.current = setTimeout(() => {
+      setPendingBannerApplying(false);
+    }, 8000);
+    setStatusFilter("pending");
+  }
+
   function clearFilters() {
     setStatusFilter("all");
     setModuleFilter("all");
@@ -172,30 +196,97 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-4">
-      {/* Pending invitations banner — only shown when there are pending users
-          and the admin is not already viewing the pending filter */}
+      {/* Pending invitations banner
+          — visible when there are pending users AND the admin has not yet
+            applied the pending filter (statusFilter !== "pending").
+          — while the filter is being applied (pendingBannerApplying) we keep
+            the banner mounted but switch it to a "Filtering…" state so the
+            user gets immediate feedback instead of seeing it vanish with no
+            visible result. */}
       {!loading && pendingCount > 0 && statusFilter !== "pending" && isAdmin && (
         <button
           type="button"
-          onClick={() => setStatusFilter("pending")}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-[10px] border border-yellow-200 dark:border-yellow-800/60 bg-yellow-50 dark:bg-yellow-900/20 text-left hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors group"
-          aria-label={`View ${pendingCount} pending invitation${pendingCount !== 1 ? "s" : ""}`}
+          onClick={handlePendingBannerClick}
+          disabled={pendingBannerApplying}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-[10px] border border-yellow-200 dark:border-yellow-800/60 bg-yellow-50 dark:bg-yellow-900/20 text-left transition-colors group disabled:cursor-default"
+          aria-label={
+            pendingBannerApplying
+              ? "Applying pending filter…"
+              : `View ${pendingCount} pending invitation${pendingCount !== 1 ? "s" : ""}`
+          }
+          aria-live="polite"
+          aria-busy={pendingBannerApplying}
         >
+          {/* Icon — swap to spinner while applying */}
           <span className="flex items-center justify-center w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-800/40 shrink-0">
-            <Mail size={15} className="text-yellow-600 dark:text-yellow-400" />
+            {pendingBannerApplying ? (
+              <Loader2 size={15} className="animate-spin text-yellow-600 dark:text-yellow-400" />
+            ) : (
+              <Mail size={15} className="text-yellow-600 dark:text-yellow-400" />
+            )}
           </span>
+
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[#0B1F3A] dark:text-foreground leading-tight">
-              {pendingCount} pending invitation{pendingCount !== 1 ? "s" : ""} awaiting acceptance
-            </p>
-            <p className="text-xs text-semi-grey mt-0.5">
-              Click to filter and view pending users
-            </p>
+            {pendingBannerApplying ? (
+              <>
+                <p className="text-sm font-medium text-[#0B1F3A] dark:text-foreground leading-tight flex items-center gap-1.5">
+                  <Filter size={13} className="text-yellow-600 dark:text-yellow-400 shrink-0" />
+                  Filtering by pending status…
+                </p>
+                <p className="text-xs text-semi-grey mt-0.5">
+                  Loading pending invitations
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-[#0B1F3A] dark:text-foreground leading-tight">
+                  {pendingCount} pending invitation{pendingCount !== 1 ? "s" : ""} awaiting acceptance
+                </p>
+                <p className="text-xs text-semi-grey mt-0.5">
+                  Click to filter and view pending users
+                </p>
+              </>
+            )}
           </div>
-          <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-yellow-200 dark:bg-yellow-700 text-yellow-800 dark:text-yellow-200 text-xs font-semibold shrink-0 group-hover:bg-yellow-300 dark:group-hover:bg-yellow-600 transition-colors">
+
+          {/* Badge count — fade out while applying */}
+          <span
+            className={`inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-yellow-200 dark:bg-yellow-700 text-yellow-800 dark:text-yellow-200 text-xs font-semibold shrink-0 transition-opacity ${
+              pendingBannerApplying
+                ? "opacity-40"
+                : "group-hover:bg-yellow-300 dark:group-hover:bg-yellow-600"
+            }`}
+          >
             {pendingCount}
           </span>
         </button>
+      )}
+
+      {/* "Applying" banner shown while loading === true (after banner click).
+          This keeps something visible in the slot while the spinner in the
+          table body below is loading, giving the user a continuous trail. */}
+      {pendingBannerApplying && loading && (
+        <div
+          role="status"
+          aria-label="Applying pending filter…"
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-[10px] border border-yellow-200 dark:border-yellow-800/60 bg-yellow-50 dark:bg-yellow-900/20"
+        >
+          <span className="flex items-center justify-center w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-800/40 shrink-0">
+            <Loader2 size={15} className="animate-spin text-yellow-600 dark:text-yellow-400" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-[#0B1F3A] dark:text-foreground leading-tight flex items-center gap-1.5">
+              <Filter size={13} className="text-yellow-600 dark:text-yellow-400 shrink-0" />
+              Filtering by pending status…
+            </p>
+            <p className="text-xs text-semi-grey mt-0.5">
+              Loading pending invitations
+            </p>
+          </div>
+          <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-yellow-200 dark:bg-yellow-700 text-yellow-800 dark:text-yellow-200 text-xs font-semibold shrink-0 opacity-40">
+            {pendingCount}
+          </span>
+        </div>
       )}
 
       {/* Responsive Toolbar */}

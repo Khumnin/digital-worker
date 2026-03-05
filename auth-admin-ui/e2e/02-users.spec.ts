@@ -11,9 +11,12 @@ test.describe("Users page", () => {
     await page.waitForSelector("table, text=No users found");
   });
 
-  test("displays user list with columns", async ({ page }) => {
+  test("displays user list with columns including Roles", async ({ page }) => {
     const header = page.locator("thead");
     await expect(header).toContainText("User");
+    // Bug Fix #1 regression guard: ROLES column must be present.
+    // Before the fix, this column rendered empty for all users.
+    await expect(header).toContainText("Roles");
     await expect(header).toContainText("Status");
     await expect(header).toContainText("Joined");
   });

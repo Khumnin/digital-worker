@@ -4,7 +4,6 @@ package handler
 import (
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -221,6 +220,9 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	// Denormalize API status values to internal DB values before querying.
 	statusFilter := denormalizeUserStatus(rawStatus)
 
+	claimsVal, _ := c.Get("jwt_claims")
+	claims := claimsVal.(middleware.JWTClaims)
+
 	users, total, err := h.adminSvc.ListUsers(c.Request.Context(), pageSize, offset, statusFilter)
 	if err != nil {
 		respondWithServiceError(c, err)
@@ -228,20 +230,8 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	}
 
 	items := make([]gin.H, len(users))
-	for i, u := range users {
-		displayName := strings.TrimSpace(u.FirstName + " " + u.LastName)
-		if displayName == "" {
-			displayName = u.Email
-		}
-		items[i] = gin.H{
-			"id":           u.ID.String(),
-			"email":        u.Email,
-			"display_name": displayName,
-			"status":       normalizeUserStatus(string(u.Status)),
-			"system_roles": []string{},
-			"module_roles": map[string][]string{},
-			"created_at":   u.CreatedAt,
-		}
+	for i, uwr := range users {
+		items[i] = buildUserResponse(uwr, claims.TenantID)
 	}
 
 	totalPages := total / pageSize
@@ -309,8 +299,13 @@ func (h *AdminHandler) ReplaceUserRoles(c *gin.Context) {
 	c.JSON(http.StatusOK, buildUserResponse(uwr, claims.TenantID))
 }
 
-// buildUserResponse constructs the standard user response object (BE-009 shape).
+// buildUserResponse constructs the BE-009 user response shape.
+// Shared by AdminHandler.ListUsers and TenantHandler.ListTenantUsers.
 func buildUserResponse(uwr *service.UserWithRoles, tenantID string) gin.H {
+	if uwr == nil || uwr.User == nil {
+		return gin.H{"error": "user data unavailable"}
+	}
+
 	systemRoles := uwr.SystemRoles
 	if systemRoles == nil {
 		systemRoles = []string{}

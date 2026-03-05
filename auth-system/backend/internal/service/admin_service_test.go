@@ -154,8 +154,15 @@ func (r *stubRoleRepo) Delete(_ context.Context, _ uuid.UUID) error             
 func (r *stubRoleRepo) IsAssignedToAnyUser(_ context.Context, _ uuid.UUID) (bool, error)        { return false, nil }
 func (r *stubRoleRepo) AssignToUser(_ context.Context, _, _, _ uuid.UUID) error                 { return nil }
 func (r *stubRoleRepo) UnassignFromUser(_ context.Context, _, _ uuid.UUID) error                { return nil }
-func (r *stubRoleRepo) GetUserRoles(_ context.Context, _ uuid.UUID) ([]*domain.Role, error)     { return nil, nil }
-func (r *stubRoleRepo) ReplaceUserRoles(_ context.Context, _ uuid.UUID, _ []uuid.UUID) error    { return nil }
+func (r *stubRoleRepo) GetUserRoles(_ context.Context, _ uuid.UUID) ([]*domain.Role, error) {
+	return nil, nil
+}
+func (r *stubRoleRepo) GetUserRolesBatch(_ context.Context, _ []uuid.UUID) (map[uuid.UUID][]*domain.Role, error) {
+	return map[uuid.UUID][]*domain.Role{}, nil
+}
+func (r *stubRoleRepo) ReplaceUserRoles(_ context.Context, _ uuid.UUID, _ []uuid.UUID, _ uuid.UUID) error {
+	return nil
+}
 
 // stubMFARepo — no-op.
 type stubMFARepo struct{}

@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -99,13 +100,11 @@ func (s *tenantServiceImpl) ProvisionTenant(ctx context.Context, input Provision
 	}
 
 	s.enqueueEmail(EmailTask{
-		Type:    EmailTypeInvitation,
-		ToEmail: tenant.AdminEmail,
-		ToName:  tenant.Name,
-		Extra: map[string]interface{}{
-			"tenant_name": tenant.Name,
-			"tenant_slug": tenant.Slug,
-		},
+		Type:       EmailTypeInvitation,
+		ToEmail:    tenant.AdminEmail,
+		ToName:     tenant.AdminEmail, // no user record exists yet; use email as display name
+		TenantSlug: tenant.Slug,
+		TenantName: tenant.Name,
 	})
 
 	return tenant, nil
@@ -274,5 +273,7 @@ func (s *tenantServiceImpl) enqueueEmail(task EmailTask) {
 	select {
 	case s.emailCh <- task:
 	default:
+		slog.Error("email channel full — provisioning invitation dropped",
+			"type", task.Type, "to", task.ToEmail, "tenant", task.TenantSlug)
 	}
 }

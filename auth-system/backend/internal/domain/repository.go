@@ -90,9 +90,13 @@ type RoleRepository interface {
 	AssignToUser(ctx context.Context, userID, roleID, assignedBy uuid.UUID) error
 	UnassignFromUser(ctx context.Context, userID, roleID uuid.UUID) error
 	GetUserRoles(ctx context.Context, userID uuid.UUID) ([]*Role, error)
+	// GetUserRolesBatch fetches roles for multiple users in a single query.
+	// Returns a map keyed by user ID; users with no roles are omitted from the map.
+	GetUserRolesBatch(ctx context.Context, userIDs []uuid.UUID) (map[uuid.UUID][]*Role, error)
 	// ReplaceUserRoles atomically deletes all existing roles for the user and
 	// inserts the new set within a single transaction.
-	ReplaceUserRoles(ctx context.Context, userID uuid.UUID, roleIDs []uuid.UUID) error
+	// actorID is recorded in the assigned_by column for every inserted row.
+	ReplaceUserRoles(ctx context.Context, userID uuid.UUID, roleIDs []uuid.UUID, actorID uuid.UUID) error
 }
 
 // TokenRepository defines operations on password_reset_tokens and email_verification_tokens.

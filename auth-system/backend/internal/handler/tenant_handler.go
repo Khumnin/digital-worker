@@ -5,7 +5,6 @@ import (
 	"context"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	pginfra "tigersoft/auth-system/internal/infrastructure/postgres"
@@ -483,21 +482,8 @@ func (h *TenantHandler) ListTenantUsers(c *gin.Context) {
 	}
 
 	items := make([]gin.H, len(users))
-	for i, u := range users {
-		displayName := strings.TrimSpace(u.FirstName + " " + u.LastName)
-		if displayName == "" {
-			displayName = u.Email
-		}
-		items[i] = gin.H{
-			"id":           u.ID.String(),
-			"email":        u.Email,
-			"display_name": displayName,
-			"status":       normalizeUserStatus(string(u.Status)),
-			"system_roles": []string{},
-			"module_roles": map[string][]string{},
-			"tenant_id":    tenantID,
-			"created_at":   u.CreatedAt,
-		}
+	for i, uwr := range users {
+		items[i] = buildUserResponse(uwr, tenantID)
 	}
 
 	totalPages := total / pageSize

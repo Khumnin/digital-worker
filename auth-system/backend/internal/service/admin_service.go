@@ -43,7 +43,7 @@ type AdminService interface {
 	// revoke sessions, delete MFA codes, delete social links, delete OAuth codes,
 	// anonymize PII, soft-delete the user record, and anonymize audit log references.
 	EraseUser(ctx context.Context, targetUserID string, requestedBy uuid.UUID) error
-	ListUsers(ctx context.Context, limit, offset int, status string) ([]*domain.User, int, error)
+	ListUsers(ctx context.Context, limit, offset int, status string) ([]*UserWithRoles, int, error)
 	GetUser(ctx context.Context, userID string) (*UserWithRoles, error)
 	ReplaceUserRoles(ctx context.Context, userID string, systemRoles []string, moduleRoles map[string][]string, actorID string) (*UserWithRoles, error)
 }
@@ -171,7 +171,15 @@ func (s *adminServiceImpl) InviteUser(ctx context.Context, email, firstName, las
 	if roleErr == nil && role != nil {
 		// Replace all current roles with this single initial role.
 		// Failure is non-fatal — the invite proceeds regardless.
-		if assignErr := s.roleRepo.ReplaceUserRoles(ctx, user.ID, []uuid.UUID{role.ID}); assignErr != nil {
+		// actorID is uuid.Nil here because the invite may be triggered by the
+		// system (e.g. tenant provisioning) with no authenticated human actor.
+		var inviteActorID uuid.UUID
+		if actorID != "" {
+			if parsed, parseErr := uuid.Parse(actorID); parseErr == nil {
+				inviteActorID = parsed
+			}
+		}
+		if assignErr := s.roleRepo.ReplaceUserRoles(ctx, user.ID, []uuid.UUID{role.ID}, inviteActorID); assignErr != nil {
 			slog.Error("invite: failed to assign initial role",
 				"user_id", user.ID, "role", roleName, "error", assignErr)
 		}
@@ -399,15 +407,52 @@ func (s *adminServiceImpl) EraseUser(ctx context.Context, targetUserID string, r
 	return nil
 }
 
-// ListUsers returns a paginated list of users in the current tenant schema
-// along with the total count. An optional status filter (DB value) narrows the results.
-func (s *adminServiceImpl) ListUsers(ctx context.Context, limit, offset int, status string) ([]*domain.User, int, error) {
+// ListUsers returns a paginated list of users in the current tenant schema along
+// with the total count and each user's resolved roles. An optional status filter
+// (DB value) narrows the results. Roles are fetched in a single batch query to
+// avoid N+1 database round-trips.
+func (s *adminServiceImpl) ListUsers(ctx context.Context, limit, offset int, status string) ([]*UserWithRoles, int, error) {
 	users, total, err := s.userRepo.ListByTenant(ctx, limit, offset, status)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list users: %w", err)
 	}
 
-	return users, total, nil
+	// Collect all user IDs for a single batch role fetch.
+	userIDs := make([]uuid.UUID, len(users))
+	for i, u := range users {
+		userIDs[i] = u.ID
+	}
+
+	rolesByUser, batchErr := s.roleRepo.GetUserRolesBatch(ctx, userIDs)
+	if batchErr != nil {
+		// Non-fatal: log and continue with empty roles rather than failing the list.
+		slog.Error("list users: failed to fetch roles batch", "error", batchErr)
+		rolesByUser = map[uuid.UUID][]*domain.Role{}
+	}
+
+	result := make([]*UserWithRoles, len(users))
+	for i, u := range users {
+		roles := rolesByUser[u.ID]
+
+		systemRoles := make([]string, 0)
+		moduleRoles := make(map[string][]string)
+		for _, r := range roles {
+			if r.Module == nil {
+				systemRoles = append(systemRoles, r.Name)
+			} else {
+				mod := *r.Module
+				moduleRoles[mod] = append(moduleRoles[mod], r.Name)
+			}
+		}
+
+		result[i] = &UserWithRoles{
+			User:        u,
+			SystemRoles: systemRoles,
+			ModuleRoles: moduleRoles,
+		}
+	}
+
+	return result, total, nil
 }
 
 // GetUser returns a single user by ID with their resolved system and module roles.
@@ -518,16 +563,18 @@ func (s *adminServiceImpl) ReplaceUserRoles(ctx context.Context, userID string, 
 		roleIDs = append(roleIDs, role.ID)
 	}
 
-	// Delegate atomic replacement to the repository.
-	if replaceErr := s.roleRepo.ReplaceUserRoles(ctx, parsedID, roleIDs); replaceErr != nil {
-		return nil, fmt.Errorf("replace user roles: %w", replaceErr)
-	}
-
+	var actorUUID uuid.UUID
 	var actorPtr *uuid.UUID
 	if actorID != "" {
 		if parsed, parseErr := uuid.Parse(actorID); parseErr == nil {
+			actorUUID = parsed
 			actorPtr = &parsed
 		}
+	}
+
+	// Delegate atomic replacement to the repository, recording the actor.
+	if replaceErr := s.roleRepo.ReplaceUserRoles(ctx, parsedID, roleIDs, actorUUID); replaceErr != nil {
+		return nil, fmt.Errorf("replace user roles: %w", replaceErr)
 	}
 
 	s.writeAuditEvent(ctx, domain.AuditEvent{
