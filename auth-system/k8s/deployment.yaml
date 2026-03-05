@@ -27,7 +27,7 @@ spec:
       # Run migrations as an init container before the API starts
       initContainers:
         - name: migrate
-          image: 855407392262.dkr.ecr.ap-southeast-7.amazonaws.com/tigersoft-auth:7221cdf1d36ec0b838834e1263846e6b27b0b6ed
+          image: 855407392262.dkr.ecr.ap-southeast-7.amazonaws.com/tigersoft-auth:4e314d8abae97b747613aaeeff7108c81d56f340
           imagePullPolicy: Always
           command: ["/migrate", "-scope=global", "-direction=up", "-seed-platform=true"]
           envFrom:
@@ -37,7 +37,7 @@ spec:
                 name: auth-api-secrets
       containers:
         - name: auth-api
-          image: 855407392262.dkr.ecr.ap-southeast-7.amazonaws.com/tigersoft-auth:7221cdf1d36ec0b838834e1263846e6b27b0b6ed
+          image: 855407392262.dkr.ecr.ap-southeast-7.amazonaws.com/tigersoft-auth:4e314d8abae97b747613aaeeff7108c81d56f340
           imagePullPolicy: Always
           ports:
             - name: http

@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: auth-admin-ui
-          image: 855407392262.dkr.ecr.ap-southeast-7.amazonaws.com/tigersoft-auth-admin-ui:7221cdf1d36ec0b838834e1263846e6b27b0b6ed
+          image: 855407392262.dkr.ecr.ap-southeast-7.amazonaws.com/tigersoft-auth-admin-ui:4e314d8abae97b747613aaeeff7108c81d56f340
           imagePullPolicy: Always
           ports:
             - name: http
