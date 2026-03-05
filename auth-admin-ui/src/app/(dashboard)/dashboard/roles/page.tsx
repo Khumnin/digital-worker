@@ -164,7 +164,7 @@ export default function RolesPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-[10px] border border-border overflow-hidden">
+      <div className="bg-card rounded-[10px] border border-border overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="animate-spin text-tiger-red" size={24} />
@@ -177,7 +177,7 @@ export default function RolesPage() {
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#fafafa] hover:bg-[#fafafa]">
+              <TableRow className="bg-[#fafafa] dark:bg-[#1a2332] hover:bg-[#fafafa] dark:hover:bg-[#1a2332]">
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">Name</TableHead>
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">Description</TableHead>
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">Module</TableHead>
@@ -188,7 +188,7 @@ export default function RolesPage() {
             </TableHeader>
             <TableBody>
               {filteredRoles.map((role) => (
-                <TableRow key={role.id} className="hover:bg-[#fafafa]">
+                <TableRow key={role.id} className="bg-white dark:bg-[#1E2533] hover:bg-[#fafafa] dark:hover:bg-[#1a2332]">
                   <TableCell className="font-medium text-semi-black text-sm font-mono">
                     {role.name}
                   </TableCell>
@@ -266,7 +266,7 @@ export default function RolesPage() {
                     name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"),
                   }))
                 }
-                className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11 font-mono"
+                className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11 font-mono"
               />
               <p className="text-xs text-semi-grey">lowercase letters, numbers, underscore</p>
             </div>
@@ -276,7 +276,7 @@ export default function RolesPage() {
                 placeholder="HR recruiter with access to job postings"
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11"
+                className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11"
               />
             </div>
             <div className="space-y-1.5">
@@ -285,7 +285,7 @@ export default function RolesPage() {
                 placeholder="recruit (leave blank for system scope)"
                 value={form.module}
                 onChange={(e) => setForm((f) => ({ ...f, module: e.target.value.toLowerCase() }))}
-                className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11"
+                className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11"
               />
               <p className="text-xs text-semi-grey">Leave blank for tenant-wide custom role</p>
             </div>

@@ -116,7 +116,10 @@ func (h *RoleHandler) UnassignRole(c *gin.Context) {
 	userID := c.Param("id")
 	roleID := c.Param("roleId")
 
-	if err := h.rbacSvc.UnassignRole(c.Request.Context(), userID, roleID); err != nil {
+	claimsVal, _ := c.Get("jwt_claims")
+	claims := claimsVal.(middleware.JWTClaims)
+
+	if err := h.rbacSvc.UnassignRole(c.Request.Context(), userID, roleID, claims.UserID); err != nil {
 		respondWithServiceError(c, err)
 		return
 	}

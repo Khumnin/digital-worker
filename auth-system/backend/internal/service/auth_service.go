@@ -105,6 +105,7 @@ type LoginResult struct {
 type LogoutInput struct {
 	RefreshToken string
 	IPAddress    string
+	UserAgent    string
 }
 
 type LogoutAllInput struct {
@@ -168,6 +169,9 @@ func (s *authServiceImpl) Register(ctx context.Context, input RegisterInput) (*R
 		ActorIP:      input.IPAddress,
 		ActorUA:      input.UserAgent,
 		TargetUserID: &user.ID,
+		Metadata: map[string]interface{}{
+			"email": user.Email,
+		},
 	})
 
 	slog.Info("user registered", "user_id", user.ID, "tenant_id", tenant.ID)
@@ -197,7 +201,10 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 			EventType: domain.EventLoginFailure,
 			ActorIP:   input.IPAddress,
 			ActorUA:   input.UserAgent,
-			Metadata:  map[string]interface{}{"reason": "user_not_found"},
+			Metadata: map[string]interface{}{
+				"reason":          "user_not_found",
+				"email_attempted": input.Email,
+			},
 		})
 		return nil, domain.ErrInvalidCredentials
 	}
@@ -209,7 +216,10 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 			ActorIP:      input.IPAddress,
 			ActorUA:      input.UserAgent,
 			TargetUserID: &user.ID,
-			Metadata:     map[string]interface{}{"reason": "account_locked"},
+			Metadata: map[string]interface{}{
+				"reason":          "account_locked",
+				"email_attempted": input.Email,
+			},
 		})
 		return nil, domain.ErrAccountLocked
 	}
@@ -250,7 +260,11 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 				ActorIP:      input.IPAddress,
 				ActorUA:      input.UserAgent,
 				TargetUserID: &user.ID,
-				Metadata:     map[string]interface{}{"locked_until": lockUntil},
+				Metadata: map[string]interface{}{
+					"locked_until": lockUntil,
+					"email":        user.Email,
+					"failed_count": newCount,
+				},
 			})
 		}
 
@@ -260,7 +274,11 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 			ActorIP:      input.IPAddress,
 			ActorUA:      input.UserAgent,
 			TargetUserID: &user.ID,
-			Metadata:     map[string]interface{}{"failed_count": newCount},
+			Metadata: map[string]interface{}{
+				"reason":          "invalid_password",
+				"failed_count":    newCount,
+				"email_attempted": input.Email,
+			},
 		})
 
 		return nil, domain.ErrInvalidCredentials
@@ -289,7 +307,10 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 				ActorIP:      input.IPAddress,
 				ActorUA:      input.UserAgent,
 				TargetUserID: &user.ID,
-				Metadata:     map[string]interface{}{"reason": "invalid_totp"},
+				Metadata: map[string]interface{}{
+					"reason":          "invalid_totp",
+					"email_attempted": input.Email,
+				},
 			})
 			return nil, domain.ErrInvalidTOTPCode
 		}
@@ -343,12 +364,22 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 		return nil, fmt.Errorf("create session: %w", err)
 	}
 
+	method := "password"
+	if input.TOTPCode != "" {
+		method = "totp_verified"
+	}
+
 	s.writeAuditEvent(ctx, domain.AuditEvent{
 		EventType:    domain.EventLoginSuccess,
 		ActorID:      &user.ID,
 		ActorIP:      input.IPAddress,
 		ActorUA:      input.UserAgent,
 		TargetUserID: &user.ID,
+		Metadata: map[string]interface{}{
+			"email":    user.Email,
+			"method":   method,
+			"mfa_used": user.MFAEnabled,
+		},
 	})
 
 	return &LoginResult{
@@ -363,14 +394,24 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 func (s *authServiceImpl) Logout(ctx context.Context, input LogoutInput) error {
 	_, tokenHash := crypto.HashToken(input.RefreshToken)
 
+	// Fetch session before revoking to capture the actor identity for the audit trail.
+	session, _ := s.sessionRepo.FindByTokenHash(ctx, tokenHash)
+
 	if err := s.sessionRepo.RevokeByTokenHash(ctx, tokenHash); err != nil {
 		slog.Warn("logout: session not found (idempotent)", "error", err)
 	}
 
-	s.writeAuditEvent(ctx, domain.AuditEvent{
+	event := domain.AuditEvent{
 		EventType: domain.EventLogout,
 		ActorIP:   input.IPAddress,
-	})
+		ActorUA:   input.UserAgent,
+	}
+	if session != nil {
+		event.ActorID = &session.UserID
+		event.TargetUserID = &session.UserID
+	}
+
+	s.writeAuditEvent(ctx, event)
 
 	return nil
 }
@@ -431,12 +472,13 @@ func timePtr(t time.Time) *time.Time { return &t }
 
 // EmailTask is a task submitted to the async email worker.
 type EmailTask struct {
-	Type      EmailType
-	ToEmail   string
-	ToName    string
-	Token     string
-	ExpiresAt time.Time
-	Extra     map[string]interface{}
+	Type       EmailType
+	ToEmail    string
+	ToName     string
+	Token      string
+	ExpiresAt  time.Time
+	TenantSlug string // used to build tenant-scoped accept-invite / verify URLs
+	Extra      map[string]interface{}
 }
 
 type EmailType string

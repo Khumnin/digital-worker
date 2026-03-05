@@ -43,7 +43,7 @@ func (h *AdminHandler) InviteUser(c *gin.Context) {
 
 	// Pass the full display_name as firstName; lastName is left empty so that
 	// domain.User.FullName() returns the display_name verbatim.
-	user, err := h.adminSvc.InviteUser(c.Request.Context(), req.Email, req.DisplayName, "", req.InitialRole)
+	user, err := h.adminSvc.InviteUser(c.Request.Context(), req.Email, req.DisplayName, "", req.InitialRole, claims.UserID)
 	if err != nil {
 		respondWithServiceError(c, err)
 		return
@@ -118,7 +118,7 @@ func (h *AdminHandler) DisableUser(c *gin.Context) {
 		}
 	}
 
-	if err := h.adminSvc.DisableUser(c.Request.Context(), userID); err != nil {
+	if err := h.adminSvc.DisableUser(c.Request.Context(), userID, claims.UserID); err != nil {
 		respondWithServiceError(c, err)
 		return
 	}
@@ -131,7 +131,10 @@ func (h *AdminHandler) DisableUser(c *gin.Context) {
 func (h *AdminHandler) EnableUser(c *gin.Context) {
 	userID := c.Param("id")
 
-	if err := h.adminSvc.EnableUser(c.Request.Context(), userID); err != nil {
+	claimsVal, _ := c.Get("jwt_claims")
+	claims := claimsVal.(middleware.JWTClaims)
+
+	if err := h.adminSvc.EnableUser(c.Request.Context(), userID, claims.UserID); err != nil {
 		respondWithServiceError(c, err)
 		return
 	}
@@ -283,7 +286,7 @@ func (h *AdminHandler) ReplaceUserRoles(c *gin.Context) {
 	claimsVal, _ := c.Get("jwt_claims")
 	claims := claimsVal.(middleware.JWTClaims)
 
-	uwr, err := h.adminSvc.ReplaceUserRoles(c.Request.Context(), userID, req.SystemRoles, req.ModuleRoles)
+	uwr, err := h.adminSvc.ReplaceUserRoles(c.Request.Context(), userID, req.SystemRoles, req.ModuleRoles, claims.UserID)
 	if err != nil {
 		respondWithServiceError(c, err)
 		return

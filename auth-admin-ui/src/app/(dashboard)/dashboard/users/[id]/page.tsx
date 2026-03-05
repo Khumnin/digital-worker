@@ -167,9 +167,9 @@ export default function UserDetailPage() {
   }
 
   const statusColor: Record<string, string> = {
-    active: "bg-[#EDFBF5] text-[#34D186] border-[#34D186]/40",
-    inactive: "bg-gray-100 text-semi-grey border-gray-200",
-    pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
+    active: "bg-[#EDFBF5] dark:bg-green-900/30 text-[#34D186] border-[#34D186]/40",
+    inactive: "bg-gray-100 dark:bg-gray-800 text-semi-grey border-gray-200 dark:border-gray-700",
+    pending: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800",
   };
 
   return (
@@ -323,8 +323,8 @@ export default function UserDetailPage() {
                       isAdmin ? "cursor-pointer" : "cursor-default"
                     } ${
                       selectedSystemRoles.includes(role.name)
-                        ? "border-tiger-red/30 bg-[#FFF8F8]"
-                        : "border-border hover:bg-[#fafafa]"
+                        ? "border-tiger-red/30 bg-[#FFF8F8] dark:bg-tiger-red/5"
+                        : "border-border hover:bg-[#fafafa] dark:hover:bg-[#1a2332]"
                     }`}
                   >
                     <input
@@ -375,8 +375,8 @@ export default function UserDetailPage() {
                             isAdmin ? "cursor-pointer" : "cursor-default"
                           } ${
                             checked
-                              ? "border-indigo-300/60 bg-indigo-50/50"
-                              : "border-border hover:bg-[#fafafa]"
+                              ? "border-indigo-300/60 bg-indigo-50/50 dark:bg-indigo-900/20 dark:border-indigo-500/30"
+                              : "border-border hover:bg-[#fafafa] dark:hover:bg-[#1a2332]"
                           }`}
                         >
                           <input

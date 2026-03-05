@@ -215,7 +215,7 @@ func TestInviteUser_NewEmail_CreatesUserAndSendsEmail(t *testing.T) {
 	tokenRepo := &stubTokenRepo{}
 	svc := newTestAdminService(userRepo, tokenRepo)
 
-	user, err := svc.InviteUser(context.Background(), "new@example.com", "New", "User", "")
+	user, err := svc.InviteUser(context.Background(), "new@example.com", "New", "User", "", "")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -248,7 +248,7 @@ func TestInviteUser_UnverifiedEmail_ResendsWithoutCreatingNewUser(t *testing.T) 
 	tokenRepo := &stubTokenRepo{}
 	svc := newTestAdminService(userRepo, tokenRepo)
 
-	user, err := svc.InviteUser(context.Background(), "pending@example.com", "Same", "Person", "")
+	user, err := svc.InviteUser(context.Background(), "pending@example.com", "Same", "Person", "", "")
 
 	if err != nil {
 		t.Fatalf("expected no error for re-invite of unverified user, got: %v", err)
@@ -278,7 +278,7 @@ func TestInviteUser_DisabledEmail_ReEnablesAndSendsInvite(t *testing.T) {
 	tokenRepo := &stubTokenRepo{}
 	svc := newTestAdminService(userRepo, tokenRepo)
 
-	user, err := svc.InviteUser(context.Background(), "disabled@example.com", "Re", "Enable", "")
+	user, err := svc.InviteUser(context.Background(), "disabled@example.com", "Re", "Enable", "", "")
 
 	if err != nil {
 		t.Fatalf("expected no error for re-invite of disabled user, got: %v", err)
@@ -308,7 +308,7 @@ func TestInviteUser_ActiveEmail_ReturnsEmailAlreadyExists(t *testing.T) {
 
 	svc := newTestAdminService(userRepo, &stubTokenRepo{})
 
-	_, err := svc.InviteUser(context.Background(), "active@example.com", "Active", "User", "")
+	_, err := svc.InviteUser(context.Background(), "active@example.com", "Active", "User", "", "")
 
 	if !errors.Is(err, domain.ErrEmailAlreadyExists) {
 		t.Errorf("expected ErrEmailAlreadyExists, got: %v", err)
@@ -326,7 +326,7 @@ func TestInviteUser_DeletedEmail_ReturnsEmailAlreadyExists(t *testing.T) {
 
 	svc := newTestAdminService(userRepo, &stubTokenRepo{})
 
-	_, err := svc.InviteUser(context.Background(), "deleted@example.com", "Ghost", "User", "")
+	_, err := svc.InviteUser(context.Background(), "deleted@example.com", "Ghost", "User", "", "")
 
 	if !errors.Is(err, domain.ErrEmailAlreadyExists) {
 		t.Errorf("expected ErrEmailAlreadyExists, got: %v", err)
@@ -337,7 +337,7 @@ func TestInviteUser_DeletedEmail_ReturnsEmailAlreadyExists(t *testing.T) {
 func TestInviteUser_InvalidEmail_ReturnsInvalidEmail(t *testing.T) {
 	svc := newTestAdminService(newStubUserRepo(), &stubTokenRepo{})
 
-	_, err := svc.InviteUser(context.Background(), "not-an-email", "Bad", "Email", "")
+	_, err := svc.InviteUser(context.Background(), "not-an-email", "Bad", "Email", "", "")
 
 	if !errors.Is(err, domain.ErrInvalidEmail) {
 		t.Errorf("expected ErrInvalidEmail, got: %v", err)

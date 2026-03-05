@@ -48,7 +48,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-page-bg flex items-center justify-center px-4">
       {/* Card */}
-      <div className="w-full max-w-[440px] bg-white rounded-[10px] p-10 shadow-sm">
+      <div className="w-full max-w-[440px] bg-card rounded-[10px] p-10 shadow-sm">
         {/* Logo / Brand */}
         <div className="mb-8 text-center">
           <Image
@@ -82,7 +82,7 @@ export default function LoginPage() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, tenantSlug: e.target.value }))
               }
-              className="bg-[#f0f0f0] border-[#f0f0f0] rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
+              className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
             />
           </div>
 
@@ -101,7 +101,7 @@ export default function LoginPage() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, email: e.target.value }))
               }
-              className="bg-[#f0f0f0] border-[#f0f0f0] rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
+              className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
             />
           </div>
 
@@ -121,7 +121,7 @@ export default function LoginPage() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, password: e.target.value }))
                 }
-                className="bg-[#f0f0f0] border-[#f0f0f0] rounded-[10px] h-12 px-4 pr-12 text-sm focus-visible:ring-tiger-red"
+                className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 pr-12 text-sm focus-visible:ring-tiger-red"
               />
               <button
                 type="button"

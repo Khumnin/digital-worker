@@ -180,7 +180,7 @@ func run() error {
 		UserHandler:      handler.NewUserHandler(profileSvc, mfaSvc),
 		MFAHandler:       handler.NewMFAHandler(mfaSvc),
 		AdminHandler:     handler.NewAdminHandler(adminSvc),
-		TenantHandler:    handler.NewTenantHandler(tenantSvc),
+		TenantHandler:    handler.NewTenantHandler(tenantSvc, adminSvc),
 		RoleHandler:      handler.NewRoleHandler(rbacSvc),
 		AuditHandler:     handler.NewAuditHandler(auditSvc),
 		WellKnownHandler: handler.NewWellKnownHandler(jwtSvc),

@@ -147,6 +147,73 @@
   --sidebar-ring: #F4001A;
 }
 
+.dark {
+  --semi-black: #E8E8E8;
+  --semi-grey: #9CA3AF;
+  --page-bg: #0D1117;
+  --background: #111827;
+  --foreground: #E8E8E8;
+  --card: #1E2533;
+  --card-foreground: #E8E8E8;
+  --popover: #1E2533;
+  --popover-foreground: #E8E8E8;
+  --primary: #F4001A;
+  --primary-foreground: #ffffff;
+  --secondary: #2A2A35;
+  --secondary-foreground: #E8E8E8;
+  --muted: #2A2A35;
+  --muted-foreground: #9CA3AF;
+  --accent: #2A2A35;
+  --accent-foreground: #E8E8E8;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: #2A2A35;
+  --input: #2A2A35;
+  --ring: #F4001A;
+  --sidebar: #161D2B;
+  --sidebar-foreground: #E8E8E8;
+  --sidebar-primary: #F4001A;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2A1A1E;
+  --sidebar-accent-foreground: #F4001A;
+  --sidebar-border: #2A2A35;
+  --sidebar-ring: #F4001A;
+
+  /*
+   * Tailwind v4 @theme inline bakes color values statically from :root,
+   * so bg-card / bg-background / etc. will not respond to .dark by default.
+   * We must explicitly re-declare the --color-* tokens that Tailwind generated
+   * so that the utility classes pick up the correct dark-mode values at runtime.
+   */
+  --color-background: #111827;
+  --color-foreground: #E8E8E8;
+  --color-card: #1E2533;
+  --color-card-foreground: #E8E8E8;
+  --color-popover: #1E2533;
+  --color-popover-foreground: #E8E8E8;
+  --color-primary: #F4001A;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #2A2A35;
+  --color-secondary-foreground: #E8E8E8;
+  --color-muted: #2A2A35;
+  --color-muted-foreground: #9CA3AF;
+  --color-accent: #2A2A35;
+  --color-accent-foreground: #E8E8E8;
+  --color-border: #2A2A35;
+  --color-input: #2A2A35;
+  --color-ring: #F4001A;
+  --color-page-bg: #0D1117;
+  --color-semi-black: #E8E8E8;
+  --color-semi-grey: #9CA3AF;
+  --color-sidebar: #161D2B;
+  --color-sidebar-foreground: #E8E8E8;
+  --color-sidebar-primary: #F4001A;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: #2A1A1E;
+  --color-sidebar-accent-foreground: #F4001A;
+  --color-sidebar-border: #2A2A35;
+  --color-sidebar-ring: #F4001A;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

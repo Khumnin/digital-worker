@@ -2,10 +2,13 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	pginfra "tigersoft/auth-system/internal/infrastructure/postgres"
 	"tigersoft/auth-system/internal/middleware"
 	"tigersoft/auth-system/internal/service"
 	"tigersoft/auth-system/pkg/apierror"
@@ -15,11 +18,12 @@ import (
 // All routes under this handler require super-admin privileges.
 type TenantHandler struct {
 	tenantSvc service.TenantService
+	adminSvc  service.AdminService
 }
 
-// NewTenantHandler constructs a TenantHandler with its required service dependency.
-func NewTenantHandler(svc service.TenantService) *TenantHandler {
-	return &TenantHandler{tenantSvc: svc}
+// NewTenantHandler constructs a TenantHandler with its required service dependencies.
+func NewTenantHandler(svc service.TenantService, adminSvc service.AdminService) *TenantHandler {
+	return &TenantHandler{tenantSvc: svc, adminSvc: adminSvc}
 }
 
 type provisionTenantRequest struct {
@@ -374,4 +378,136 @@ func (h *TenantHandler) RotateCredentials(c *gin.Context) {
 		"client_secret": secret,
 		"warning":       "Previous credentials have been revoked. Store the new secret securely.",
 	})
+}
+
+type inviteAdminRequest struct {
+	Email       string `json:"email"        validate:"required,email"`
+	DisplayName string `json:"display_name" validate:"required,min=1,max=200"`
+}
+
+// InviteAdminToTenant handles POST /api/v1/admin/tenants/:id/invite-admin.
+// Creates a new admin user in the target tenant's schema and sends an invitation email.
+// The operation runs in the target tenant's PostgreSQL schema, not the caller's.
+func (h *TenantHandler) InviteAdminToTenant(c *gin.Context) {
+	tenantID := c.Param("id")
+
+	var req inviteAdminRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+
+	tenant, err := h.tenantSvc.GetTenant(c.Request.Context(), tenantID)
+	if err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	// Operate in the target tenant's schema and identity, not the platform schema.
+	ctx := context.WithValue(c.Request.Context(), pginfra.CtxKeySchemaName, tenant.SchemaName)
+	ctx = context.WithValue(ctx, pginfra.CtxKeyTenantID, tenant.Slug)
+
+	claimsVal, _ := c.Get("jwt_claims")
+	claims := claimsVal.(middleware.JWTClaims)
+
+	user, err := h.adminSvc.InviteUser(ctx, req.Email, req.DisplayName, "", "admin", claims.UserID)
+	if err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"id":           user.ID.String(),
+		"email":        user.Email,
+		"display_name": user.FullName(),
+		"status":       normalizeUserStatus(string(user.Status)),
+		"system_roles": []string{"admin"},
+		"tenant_id":    tenantID,
+		"created_at":   user.CreatedAt,
+	})
+}
+
+// ListTenantUsers handles GET /api/v1/admin/tenants/:id/users.
+// Returns the list of users in the specified tenant's schema (cross-tenant read).
+func (h *TenantHandler) ListTenantUsers(c *gin.Context) {
+	tenantID := c.Param("id")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	tenant, err := h.tenantSvc.GetTenant(c.Request.Context(), tenantID)
+	if err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	// Operate in the target tenant's schema and identity.
+	ctx := context.WithValue(c.Request.Context(), pginfra.CtxKeySchemaName, tenant.SchemaName)
+	ctx = context.WithValue(ctx, pginfra.CtxKeyTenantID, tenant.Slug)
+
+	users, total, err := h.adminSvc.ListUsers(ctx, pageSize, offset)
+	if err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	items := make([]gin.H, len(users))
+	for i, u := range users {
+		displayName := strings.TrimSpace(u.FirstName + " " + u.LastName)
+		if displayName == "" {
+			displayName = u.Email
+		}
+		items[i] = gin.H{
+			"id":           u.ID.String(),
+			"email":        u.Email,
+			"display_name": displayName,
+			"status":       normalizeUserStatus(string(u.Status)),
+			"system_roles": []string{},
+			"module_roles": map[string][]string{},
+			"tenant_id":    tenantID,
+			"created_at":   u.CreatedAt,
+		}
+	}
+
+	totalPages := total / pageSize
+	if total%pageSize != 0 {
+		totalPages++
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":        items,
+		"total":       total,
+		"page":        page,
+		"page_size":   pageSize,
+		"total_pages": totalPages,
+	})
+}
+
+// ResendAdminInvite handles POST /api/v1/admin/tenants/:id/users/:userId/resend-invite.
+// Re-sends the invitation email for a pending user in the specified tenant's schema.
+func (h *TenantHandler) ResendAdminInvite(c *gin.Context) {
+	tenantID := c.Param("id")
+	userID := c.Param("userId")
+
+	tenant, err := h.tenantSvc.GetTenant(c.Request.Context(), tenantID)
+	if err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	ctx := context.WithValue(c.Request.Context(), pginfra.CtxKeySchemaName, tenant.SchemaName)
+	ctx = context.WithValue(ctx, pginfra.CtxKeyTenantID, tenant.Slug)
+
+	if err := h.adminSvc.ResendInvite(ctx, userID); err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Invitation re-sent successfully."})
 }

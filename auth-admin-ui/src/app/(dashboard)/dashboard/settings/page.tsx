@@ -91,7 +91,7 @@ export default function SettingsPage() {
             <button
               onClick={() => setMfaRequired((v) => !v)}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                mfaRequired ? "bg-tiger-red" : "bg-[#e5e5e5]"
+                mfaRequired ? "bg-tiger-red" : "bg-[#e5e5e5] dark:bg-[#3A3A45]"
               }`}
             >
               <span
@@ -114,7 +114,7 @@ export default function SettingsPage() {
               max="168"
               value={sessionHours}
               onChange={(e) => setSessionHours(e.target.value)}
-              className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11 max-w-[160px]"
+              className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11 max-w-[160px]"
             />
             <p className="text-xs text-semi-grey">
               How long refresh tokens remain valid. Default: 1 hour.
@@ -132,7 +132,7 @@ export default function SettingsPage() {
               onChange={(e) => setAllowedDomains(e.target.value)}
               placeholder="company.co.th, partner.com"
               rows={3}
-              className="w-full rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] border px-3 py-2 text-sm text-semi-black placeholder:text-semi-grey resize-none focus:outline-none focus:ring-2 focus:ring-tiger-red/30"
+              className="w-full rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input border px-3 py-2 text-sm text-semi-black placeholder:text-semi-grey resize-none focus:outline-none focus:ring-2 focus:ring-tiger-red/30"
             />
             <p className="text-xs text-semi-grey">
               Comma-separated list of email domains allowed to sign up. Leave empty to allow all domains.
@@ -158,7 +158,7 @@ export default function SettingsPage() {
               <p className="text-semi-grey text-[10px] uppercase font-semibold not-italic">
                 {item.label}
               </p>
-              <div className="bg-[#f0f0f0] rounded-[10px] px-3 py-2 text-semi-black break-all">
+              <div className="bg-[#f0f0f0] dark:bg-input rounded-[10px] px-3 py-2 text-semi-black break-all">
                 {item.value}
               </div>
             </div>

@@ -156,7 +156,7 @@ export default function MyProfilePage() {
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="First name"
-                  className="bg-[#f0f0f0] border-[#f0f0f0] rounded-[10px] h-10 text-sm"
+                  className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-10 text-sm"
                 />
               </div>
               <div className="space-y-1.5">
@@ -165,7 +165,7 @@ export default function MyProfilePage() {
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Last name"
-                  className="bg-[#f0f0f0] border-[#f0f0f0] rounded-[10px] h-10 text-sm"
+                  className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-10 text-sm"
                 />
               </div>
             </div>
@@ -235,7 +235,7 @@ export default function MyProfilePage() {
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   required
                   placeholder="••••••••"
-                  className="bg-[#f0f0f0] border-[#f0f0f0] rounded-[10px] h-10 text-sm pr-10"
+                  className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-10 text-sm pr-10"
                 />
                 <button
                   type="button"
@@ -256,7 +256,7 @@ export default function MyProfilePage() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
                   placeholder="Min. 8 characters"
-                  className="bg-[#f0f0f0] border-[#f0f0f0] rounded-[10px] h-10 text-sm pr-10"
+                  className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-10 text-sm pr-10"
                 />
                 <button
                   type="button"
@@ -276,7 +276,7 @@ export default function MyProfilePage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 placeholder="Re-enter new password"
-                className="bg-[#f0f0f0] border-[#f0f0f0] rounded-[10px] h-10 text-sm"
+                className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-10 text-sm"
               />
             </div>
             <div className="flex justify-end">

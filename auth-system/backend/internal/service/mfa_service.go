@@ -221,6 +221,7 @@ func (s *mfaServiceImpl) VerifyTOTP(ctx context.Context, userID uuid.UUID, code 
 			EventType:    domain.EventMFAVerified,
 			ActorID:      &userID,
 			TargetUserID: &userID,
+			Metadata:     map[string]interface{}{"method": "totp"},
 		})
 		return nil
 	}

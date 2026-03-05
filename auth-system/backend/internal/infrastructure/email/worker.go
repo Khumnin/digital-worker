@@ -109,6 +109,9 @@ func (w *Worker) buildMessage(task service.EmailTask) Message {
 func (w *Worker) buildInvitationMessage(task service.EmailTask) Message {
 	expiryDate := task.ExpiresAt.Format("2 January 2006")
 	acceptURL := fmt.Sprintf("%s/accept-invite?token=%s", w.cfg.AppURL, task.Token)
+	if task.TenantSlug != "" {
+		acceptURL += "&tenant=" + task.TenantSlug
+	}
 
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">

@@ -20,7 +20,7 @@ type RBACService interface {
 	// domain.ErrRoleInUse if any user currently holds the role.
 	DeleteRole(ctx context.Context, roleID string) error
 	AssignRole(ctx context.Context, userID, roleID, assignedBy string) error
-	UnassignRole(ctx context.Context, userID, roleID string) error
+	UnassignRole(ctx context.Context, userID, roleID, assignedBy string) error
 	GetUserRoles(ctx context.Context, userID string) ([]*domain.Role, error)
 }
 
@@ -116,20 +116,25 @@ func (s *rbacServiceImpl) AssignRole(ctx context.Context, userID, roleID, assign
 		return fmt.Errorf("assign role to user: %w", err)
 	}
 
+	roleMeta := map[string]interface{}{"role_id": parsedRoleID.String()}
+	if role, lookupErr := s.roleRepo.FindByID(ctx, parsedRoleID); lookupErr == nil {
+		roleMeta["role_name"] = role.Name
+	} else {
+		slog.Warn("assign role: could not look up role name for audit", "role_id", parsedRoleID, "error", lookupErr)
+	}
+
 	s.writeAuditEvent(ctx, domain.AuditEvent{
 		EventType:    domain.EventRoleAssigned,
 		ActorID:      &parsedAssignedBy,
 		TargetUserID: &parsedUserID,
-		Metadata: map[string]interface{}{
-			"role_id": parsedRoleID.String(),
-		},
+		Metadata:     roleMeta,
 	})
 
 	return nil
 }
 
 // UnassignRole removes a role from a user and writes an audit record.
-func (s *rbacServiceImpl) UnassignRole(ctx context.Context, userID, roleID string) error {
+func (s *rbacServiceImpl) UnassignRole(ctx context.Context, userID, roleID, assignedBy string) error {
 	parsedUserID, err := uuid.Parse(userID)
 	if err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
@@ -140,17 +145,27 @@ func (s *rbacServiceImpl) UnassignRole(ctx context.Context, userID, roleID strin
 		return fmt.Errorf("invalid role ID: %w", err)
 	}
 
+	parsedAssignedBy, err := uuid.Parse(assignedBy)
+	if err != nil {
+		return fmt.Errorf("invalid assignedBy ID: %w", err)
+	}
+
 	if err := s.roleRepo.UnassignFromUser(ctx, parsedUserID, parsedRoleID); err != nil {
 		return fmt.Errorf("unassign role from user: %w", err)
 	}
 
+	roleMeta := map[string]interface{}{"role_id": parsedRoleID.String()}
+	if role, lookupErr := s.roleRepo.FindByID(ctx, parsedRoleID); lookupErr == nil {
+		roleMeta["role_name"] = role.Name
+	} else {
+		slog.Warn("unassign role: could not look up role name for audit", "role_id", parsedRoleID, "error", lookupErr)
+	}
+
 	s.writeAuditEvent(ctx, domain.AuditEvent{
 		EventType:    domain.EventRoleUnassigned,
-		ActorID:      &parsedUserID,
+		ActorID:      &parsedAssignedBy,
 		TargetUserID: &parsedUserID,
-		Metadata: map[string]interface{}{
-			"role_id": parsedRoleID.String(),
-		},
+		Metadata:     roleMeta,
 	})
 
 	return nil

@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { ChevronDown, Globe } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -34,17 +35,20 @@ export function Header({ lang, onLangChange, title }: HeaderProps) {
       : "?";
 
   return (
-    <header className="h-[64px] bg-white border-b border-border flex items-center justify-between px-6 shrink-0">
+    <header className="h-[64px] bg-card border-b border-border flex items-center justify-between px-6 shrink-0">
       {/* Page title */}
       <h2 className="text-[15px] font-semibold text-semi-black">
         {title ?? "Dashboard"}
       </h2>
 
       <div className="flex items-center gap-3">
+        {/* Theme toggle */}
+        <ThemeToggle />
+
         {/* Language toggle */}
         <button
           onClick={() => onLangChange(lang === "th" ? "en" : "th")}
-          className="flex items-center gap-1.5 text-sm text-semi-grey hover:text-semi-black transition-colors px-2 py-1.5 rounded-[8px] hover:bg-[#f5f5f5]"
+          className="flex items-center gap-1.5 text-sm text-semi-grey hover:text-semi-black transition-colors px-2 py-1.5 rounded-[8px] hover:bg-[#f5f5f5] dark:hover:bg-[#2A2A35]"
         >
           <Globe size={16} />
           <span className="font-medium">{lang.toUpperCase()}</span>
@@ -53,7 +57,7 @@ export function Header({ lang, onLangChange, title }: HeaderProps) {
         {/* User menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-[1000px] px-3 py-1.5 hover:bg-[#f5f5f5] transition-colors">
+            <button className="flex items-center gap-2 rounded-[1000px] px-3 py-1.5 hover:bg-[#f5f5f5] dark:hover:bg-[#2A2A35] transition-colors">
               {/* Avatar */}
               <div className="w-8 h-8 rounded-full bg-tiger-red text-white flex items-center justify-center text-sm font-semibold">
                 {initials}

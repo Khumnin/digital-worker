@@ -65,8 +65,8 @@ function ForgotPasswordForm() {
   if (done) {
     return (
       <div className="min-h-screen bg-page-bg flex items-center justify-center px-4">
-        <div className="w-full max-w-[440px] bg-white rounded-[10px] p-10 shadow-sm text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-50 mb-5">
+        <div className="w-full max-w-[440px] bg-card rounded-[10px] p-10 shadow-sm text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-50 dark:bg-green-900/30 mb-5">
             <CheckCircle2 size={28} className="text-green-500" />
           </div>
           <h1 className="text-xl font-semibold text-semi-black mb-2">
@@ -89,7 +89,7 @@ function ForgotPasswordForm() {
 
   return (
     <div className="min-h-screen bg-page-bg flex items-center justify-center px-4">
-      <div className="w-full max-w-[440px] bg-white rounded-[10px] p-10 shadow-sm">
+      <div className="w-full max-w-[440px] bg-card rounded-[10px] p-10 shadow-sm">
         {/* Brand */}
         <div className="mb-8 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-tiger-red mb-4">
@@ -120,7 +120,7 @@ function ForgotPasswordForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="bg-[#f0f0f0] border-[#f0f0f0] rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
+              className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
             />
           </div>
 

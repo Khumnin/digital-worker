@@ -139,6 +139,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	if err := h.authSvc.Logout(c.Request.Context(), service.LogoutInput{
 		RefreshToken: req.RefreshToken,
 		IPAddress:    c.ClientIP(),
+		UserAgent:    c.Request.UserAgent(),
 	}); err != nil {
 		respondWithServiceError(c, err)
 		return
