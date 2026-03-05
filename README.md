@@ -1,52 +1,39 @@
-# 🤖 Digital Worker — AI Agent Squad
+# 🔐 Digital Worker — Multi-Tenant Authentication System
 
-An AI-powered agentic project where **5 role-based agents** collaborate to design, plan, architect, implement, and test a production-grade **Multi-Tenant Authentication System**.
+A production-grade, cloud-native, API-first authentication service with multi-tenant isolation, built with **Go + Gin** on the backend and **Next.js 15** on the frontend.
+
+> This project was designed end-to-end by a squad of 5 role-based AI agents (Product Owner, Project Manager, Solution Architect, Developer, Tester) during the planning phase. All 9 sprints are now **fully implemented** with production code.
 
 ---
 
 ## 📋 Project Overview
 
-This project uses Claude-based AI agents, each playing a specific professional role, to produce a complete software delivery pipeline — from product requirements through implementation guides and quality assurance test plans.
+### 🎯 Multi-Tenant Authentication System
 
-### 🎯 Current Project: Multi-Tenant Authentication System
+A cloud-native authentication service supporting strict tenant isolation, enterprise-grade security, OAuth 2.0, TOTP MFA, RBAC, and a full-featured admin dashboard UI.
 
-A cloud-native, API-first authentication service supporting multi-tenant isolation with enterprise-grade security.
+**Key Architecture Decisions (Non-Negotiable)**
 
-**Key Constraints (Non-Negotiable)**
 | Decision | Detail |
 |----------|--------|
 | ADR-001 | Schema-per-tenant PostgreSQL |
 | ADR-002 | One user = one tenant |
-| ADR-003 | API-only, no hosted UI |
+| ADR-003 | API-only, no hosted UI (backend) |
 | ADR-004 | JWT RS256 (15min) + opaque refresh tokens |
-
----
-
-## 🧑‍💼 Agent Squad
-
-Agents live in `.claude/agents/` and are invoked to generate and maintain project documentation.
-
-| Agent | Role | Methodology |
-|-------|------|-------------|
-| **Product Owner** | Requirements & Backlog | INVEST stories, MoSCoW, Gherkin, Agile ceremonies |
-| **Project Manager** | Planning & Coordination | Hybrid methodology, WBS, RACI, Risk Register, Budget |
-| **Solution Architect** | Architecture & Design | Clean Architecture, C4 Diagrams, DDD, Cloud-Native |
-| **Developer** | Implementation Guide | Next.js + Go/Gin, Handler→Service→Repository pattern |
-| **Tester** | Quality Assurance | ISTQB, ISO 25010, Playwright, Quality Gates |
 
 ---
 
 ## 🏗️ Tech Stack
 
 ```
-Backend       Go + Gin
-Frontend      Next.js (TypeScript)
+Backend       Go + Gin · Handler → Service → Repository
+Frontend      Next.js 15 + TypeScript + shadcn/ui + Tailwind CSS
 Database      PostgreSQL (schema-per-tenant)
 Cache/Queue   Redis
 Auth Library  ory/fosite
 Secrets       HashiCorp Vault
 Email         Resend
-Deployment    Fly.io
+Deployment    Kubernetes (K8s manifests + GitHub Actions CI/CD)
 ```
 
 ---
@@ -55,35 +42,165 @@ Deployment    Fly.io
 
 ```
 digital-worker/
-├── .claude/
-│   └── agents/
-│       ├── product-owner/
-│       ├── project-manager/
-│       ├── solution-architect/
-│       ├── developer/
-│       └── tester/
+├── auth-admin-ui/                  # Frontend — Next.js 15 + TypeScript + shadcn/ui
+│   ├── Dockerfile
+│   ├── k8s/                        # K8s deployment manifests
+│   ├── e2e/                        # Playwright E2E tests (8 spec files)
+│   ├── src/
+│   │   ├── app/                    # Next.js App Router
+│   │   │   ├── (auth)/             # Login, forgot password, reset password, accept invite
+│   │   │   └── (dashboard)/        # Dashboard, tenants, users, roles, settings, /me profile
+│   │   ├── components/             # React components (layout, UI, dialogs)
+│   │   ├── contexts/               # Theme context (dark/light)
+│   │   └── lib/                    # Utilities & API client
+│   └── public/                     # Static assets & TigerSoft logos
+├── auth-system/                    # Backend — Go + Gin
+│   ├── backend/
+│   │   ├── cmd/                    # Entry points (api, migrate)
+│   │   ├── internal/               # Clean Architecture layers
+│   │   │   ├── config/
+│   │   │   ├── domain/
+│   │   │   ├── handler/
+│   │   │   ├── infrastructure/
+│   │   │   ├── middleware/
+│   │   │   ├── repository/
+│   │   │   ├── router/
+│   │   │   └── service/
+│   │   ├── migrations/             # PostgreSQL migrations (global + tenant)
+│   │   └── pkg/                    # Shared packages (jwtutil, crypto, apierror, validator)
+│   ├── docker-compose.yml          # Local dev stack (PostgreSQL, Redis, Vault, Mailhog)
+│   ├── k8s/                        # K8s deployment manifests (deployment, hpa, configmap, secret)
+│   ├── tests/                      # API E2E tests (Playwright)
+│   └── scripts/                    # Utility scripts (eks-setup.sh)
 ├── docs/
 │   └── auth-system/
-│       ├── prd.md                      # Product Requirements Document (42KB)
-│       ├── project-management-plan.md  # Project Management Plan (100KB)
-│       ├── solution-architecture.md    # Solution Architecture (131KB)
-│       ├── implementation-guide.md     # Developer Implementation Guide (197KB)
-│       └── test-plan.md                # QA Test Plan (235KB)
-├── CLAUDE.md                           # Agent squad context & pipeline status
+│       ├── prd.md                      # PRD (42KB)
+│       ├── prd-v2.md                   # Updated PRD v2 (33KB)
+│       ├── project-management-plan.md  # Project Plan (101KB)
+│       ├── solution-architecture.md    # Architecture (134KB)
+│       ├── implementation-guide.md     # Implementation Guide (203KB)
+│       ├── test-plan.md                # Test Plan (234KB)
+│       └── api-reference.md            # API Reference (30KB)
+├── guide/                          # TigerSoft Branding CI toolkit & assets
+│   ├── BRANDING.md
+│   ├── CI Toolkit/
+│   └── Logo Tigersoft 5/
+├── .github/workflows/              # CI/CD (ci.yml, deploy.yml)
+├── CLAUDE.md
 └── README.md
 ```
 
 ---
 
-## ✅ Pipeline Status
+## 🖥️ Admin UI (auth-admin-ui)
 
-| Phase | Agent | Status | Output |
-|-------|-------|--------|--------|
-| 1. Requirements | Product Owner | ✅ Complete | `docs/auth-system/prd.md` |
-| 2. Planning | Project Manager | ✅ Complete | `docs/auth-system/project-management-plan.md` |
-| 3. Architecture | Solution Architect | ✅ Complete | `docs/auth-system/solution-architecture.md` |
-| 4. Implementation | Developer | ✅ Complete | `docs/auth-system/implementation-guide.md` |
-| 5. Testing | Tester | ✅ Complete | `docs/auth-system/test-plan.md` |
+A full-featured administration dashboard built with **Next.js 15**, **TypeScript**, **shadcn/ui**, and **Tailwind CSS**, complying with TigerSoft Corporate Identity branding.
+
+**Features**
+- **Dashboard** — system overview and activity summary
+- **Tenant Management** — create, view, and configure tenants
+- **User Management** — invite, view, suspend, and manage users per tenant
+- **Role Management** — assign and unassign tenant-scoped roles
+- **Settings** — per-tenant configuration including MFA enforcement
+- **My Profile** (`/me`) — accessible to all authenticated users; update name, change password
+- **Auth pages** — Login, Forgot Password, Reset Password, Accept Invite
+- **Dark / Light theme** support
+- **E2E tests** — 8 Playwright spec files covering all major flows
+
+---
+
+## 🧑‍💼 Agent Squad (Planning Phase)
+
+This project was planned end-to-end by 5 role-based AI agents before any code was written. The agent definition files have since been removed as all planning is complete and production code exists.
+
+| Agent | Role | Output |
+|-------|------|--------|
+| **Product Owner** | Requirements & Backlog | `docs/auth-system/prd.md` |
+| **Project Manager** | Planning & Coordination | `docs/auth-system/project-management-plan.md` |
+| **Solution Architect** | Architecture & Design | `docs/auth-system/solution-architecture.md` |
+| **Developer** | Implementation Guide | `docs/auth-system/implementation-guide.md` |
+| **Tester** | Quality Assurance | `docs/auth-system/test-plan.md` |
+
+---
+
+## ✅ Implementation Status
+
+All 9 sprints are complete and production code is deployed.
+
+| Sprint | Theme | Status |
+|--------|-------|--------|
+| Sprint 1 | Core Auth Flows (Register, Login, Email Verify, Password Reset) | ✅ Complete |
+| Sprint 2 | Sessions, Security & Audit (Rate Limiting, Token Rotation, 19 Audit Events) | ✅ Complete |
+| Sprint 3 | Multi-Tenancy Foundation (Schema-per-tenant, Cross-tenant Isolation) | ✅ Complete |
+| Sprint 4 | RBAC, JWT Claims & Token Introspection (RFC 7662, RFC 7517) | ✅ Complete |
+| Sprint 5 | OAuth 2.0 Authorization Code + PKCE S256 | ✅ Complete |
+| Sprint 6 | OAuth M2M (Client Credentials) + Google Social Login (OIDC) | ✅ Complete |
+| Sprint 7 | TOTP MFA + User Profile API | ✅ Complete |
+| Sprint 8 | Hardening & Compliance (GDPR, OWASP, Performance Indexes, Health Check) | ✅ Complete |
+| Sprint 9 | Launch Preparation, UAT & E2E Regression Suite | ✅ Complete |
+
+---
+
+## 🚀 Getting Started
+
+### 1. Start Local Infrastructure
+
+Run from the `auth-system/` directory:
+
+```bash
+cd auth-system
+docker compose up -d
+```
+
+This brings up: **PostgreSQL** · **Redis** · **HashiCorp Vault** · **Mailhog**
+
+### 2. Run Migrations
+
+```bash
+cd auth-system/backend
+go run ./cmd/migrate/main.go -scope=global -direction=up
+```
+
+### 3. Start the Backend API
+
+```bash
+cd auth-system/backend
+go run ./cmd/api/main.go
+```
+
+### 4. Start the Frontend
+
+```bash
+cd auth-admin-ui
+npm install
+npm run dev
+```
+
+The admin UI will be available at `http://localhost:3000`.
+
+### 5. Run Tests
+
+```bash
+# Backend unit tests
+cd auth-system/backend
+go test ./...
+
+# Backend E2E API tests
+cd auth-system/tests && npx playwright test --project=api
+
+# Frontend E2E tests
+cd auth-admin-ui && npx playwright test
+```
+
+---
+
+## 🚢 Deployment
+
+Both services are containerised and deploy to Kubernetes.
+
+- **Backend** — `auth-system/backend/Dockerfile` (multi-stage, `CGO_ENABLED=0` minimal image) + `auth-system/k8s/`
+- **Frontend** — `auth-admin-ui/Dockerfile` + `auth-admin-ui/k8s/`
+- **CI/CD** — GitHub Actions workflows in `.github/workflows/` handle build, test, and deploy on merge to `main`
 
 ---
 
@@ -251,6 +368,7 @@ digital-worker/
 - New audit events wired: `MFA_ENABLED`, `MFA_DISABLED`, `MFA_VERIFIED`, `MFA_FAILED`, `MFA_ENFORCEMENT_CHANGED`, `PROFILE_UPDATED`
 
 **New endpoints**
+
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/users/me/mfa/generate` | Returns `otpauth://` URL + base32 secret for QR code |
@@ -343,45 +461,17 @@ Self-service requires password confirmation. Admin erase requires `admin` role.
 
 ---
 
-## 🚀 Getting Started
-
-### 1. Start Local Infrastructure
-```bash
-docker compose up -d
-```
-This brings up: **PostgreSQL** · **Redis** · **HashiCorp Vault** · **Mailhog**
-
-### 2. Run Migrations
-```bash
-cd auth-system/backend
-go run ./cmd/migrate/main.go -scope=global -direction=up
-```
-
-### 3. Start the API
-```bash
-go run ./cmd/api/main.go
-```
-
-### 4. Run Tests
-```bash
-# Unit tests
-go test ./...
-
-# E2E tests
-cd auth-system/tests && npx playwright test --project=api
-```
-
----
-
 ## 📖 Documentation
 
 | Document | Description |
 |----------|-------------|
 | [PRD](docs/auth-system/prd.md) | Product requirements, user stories, acceptance criteria |
+| [PRD v2](docs/auth-system/prd-v2.md) | Updated product requirements (v2) |
 | [Project Plan](docs/auth-system/project-management-plan.md) | WBS, RACI, risk register, timeline, budget |
 | [Architecture](docs/auth-system/solution-architecture.md) | C4 diagrams, ADRs, data models, API contracts |
 | [Implementation Guide](docs/auth-system/implementation-guide.md) | Code scaffold, patterns, Go/Next.js setup |
 | [Test Plan](docs/auth-system/test-plan.md) | Test strategy, cases, quality gates, Playwright setup |
+| [API Reference](docs/auth-system/api-reference.md) | Full API endpoint reference |
 
 ---
 
