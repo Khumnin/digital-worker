@@ -43,7 +43,7 @@ type AdminService interface {
 	// revoke sessions, delete MFA codes, delete social links, delete OAuth codes,
 	// anonymize PII, soft-delete the user record, and anonymize audit log references.
 	EraseUser(ctx context.Context, targetUserID string, requestedBy uuid.UUID) error
-	ListUsers(ctx context.Context, limit, offset int) ([]*domain.User, int, error)
+	ListUsers(ctx context.Context, limit, offset int, status string) ([]*domain.User, int, error)
 	GetUser(ctx context.Context, userID string) (*UserWithRoles, error)
 	ReplaceUserRoles(ctx context.Context, userID string, systemRoles []string, moduleRoles map[string][]string, actorID string) (*UserWithRoles, error)
 }
@@ -57,6 +57,7 @@ type adminServiceImpl struct {
 	mfaRepo           domain.MFARepository
 	socialAccountRepo domain.SocialAccountRepository
 	codeRepo          domain.AuthorizationCodeRepository
+	tenantRepo        domain.TenantRepository
 	emailCh           chan<- EmailTask
 }
 
@@ -69,6 +70,7 @@ func NewAdminService(
 	mfaRepo domain.MFARepository,
 	socialAccountRepo domain.SocialAccountRepository,
 	codeRepo domain.AuthorizationCodeRepository,
+	tenantRepo domain.TenantRepository,
 	emailCh chan<- EmailTask,
 ) AdminService {
 	return &adminServiceImpl{
@@ -79,6 +81,7 @@ func NewAdminService(
 		mfaRepo:           mfaRepo,
 		socialAccountRepo: socialAccountRepo,
 		codeRepo:          codeRepo,
+		tenantRepo:        tenantRepo,
 		emailCh:           emailCh,
 	}
 }
@@ -191,6 +194,7 @@ func (s *adminServiceImpl) InviteUser(ctx context.Context, email, firstName, las
 	}
 
 	tenantSlug, _ := ctx.Value(pginfra.CtxKeyTenantID).(string)
+	tenantName := s.resolveTenantName(ctx, tenantSlug)
 
 	s.enqueueEmail(EmailTask{
 		Type:       EmailTypeInvitation,
@@ -199,6 +203,7 @@ func (s *adminServiceImpl) InviteUser(ctx context.Context, email, firstName, las
 		Token:      rawToken,
 		ExpiresAt:  expiresAt,
 		TenantSlug: tenantSlug,
+		TenantName: tenantName,
 	})
 
 	var actorPtr *uuid.UUID
@@ -252,6 +257,7 @@ func (s *adminServiceImpl) ResendInvite(ctx context.Context, userID string) erro
 	}
 
 	tenantSlug, _ := ctx.Value(pginfra.CtxKeyTenantID).(string)
+	tenantName := s.resolveTenantName(ctx, tenantSlug)
 
 	s.enqueueEmail(EmailTask{
 		Type:       EmailTypeInvitation,
@@ -260,6 +266,7 @@ func (s *adminServiceImpl) ResendInvite(ctx context.Context, userID string) erro
 		Token:      rawToken,
 		ExpiresAt:  expiresAt,
 		TenantSlug: tenantSlug,
+		TenantName: tenantName,
 	})
 
 	s.writeAuditEvent(ctx, domain.AuditEvent{
@@ -393,9 +400,9 @@ func (s *adminServiceImpl) EraseUser(ctx context.Context, targetUserID string, r
 }
 
 // ListUsers returns a paginated list of users in the current tenant schema
-// along with the total count.
-func (s *adminServiceImpl) ListUsers(ctx context.Context, limit, offset int) ([]*domain.User, int, error) {
-	users, total, err := s.userRepo.ListByTenant(ctx, limit, offset)
+// along with the total count. An optional status filter (DB value) narrows the results.
+func (s *adminServiceImpl) ListUsers(ctx context.Context, limit, offset int, status string) ([]*domain.User, int, error) {
+	users, total, err := s.userRepo.ListByTenant(ctx, limit, offset, status)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list users: %w", err)
 	}
@@ -534,6 +541,19 @@ func (s *adminServiceImpl) ReplaceUserRoles(ctx context.Context, userID string, 
 	})
 
 	return s.resolveUserWithRoles(ctx, user)
+}
+
+// resolveTenantName fetches the tenant display name by slug.
+// Falls back to the slug itself if the tenant cannot be found or tenantRepo is nil.
+func (s *adminServiceImpl) resolveTenantName(ctx context.Context, slug string) string {
+	if slug == "" || s.tenantRepo == nil {
+		return slug
+	}
+	tenant, err := s.tenantRepo.FindBySlug(ctx, slug)
+	if err != nil || tenant == nil {
+		return slug
+	}
+	return tenant.Name
 }
 
 func (s *adminServiceImpl) enqueueEmail(task EmailTask) {

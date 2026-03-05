@@ -87,7 +87,7 @@ func (r *stubUserRepo) ResetFailedLoginCount(_ context.Context, _ uuid.UUID) err
 func (r *stubUserRepo) SetLockedUntil(_ context.Context, _ uuid.UUID, _ time.Time) error {
 	return nil
 }
-func (r *stubUserRepo) ListByTenant(_ context.Context, _, _ int) ([]*domain.User, int, error) {
+func (r *stubUserRepo) ListByTenant(_ context.Context, _, _ int, _ string) ([]*domain.User, int, error) {
 	return nil, 0, nil
 }
 func (r *stubUserRepo) SoftDelete(_ context.Context, _ uuid.UUID) error    { return nil }
@@ -200,6 +200,7 @@ func newTestAdminService(userRepo *stubUserRepo, tokenRepo *stubTokenRepo) servi
 		&stubMFARepo{},
 		&stubSocialAccountRepo{},
 		&stubAuthCodeRepo{},
+		nil, // tenantRepo not needed in unit tests; resolveTenantName falls back to slug
 		emailCh,
 	)
 	return service.WithTokenRepo(svc, tokenRepo)

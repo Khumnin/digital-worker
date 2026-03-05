@@ -18,7 +18,7 @@ type UserRepository interface {
 	IncrementFailedLoginCount(ctx context.Context, id uuid.UUID) (int, error)
 	ResetFailedLoginCount(ctx context.Context, id uuid.UUID) error
 	SetLockedUntil(ctx context.Context, id uuid.UUID, until time.Time) error
-	ListByTenant(ctx context.Context, limit, offset int) ([]*User, int, error)
+	ListByTenant(ctx context.Context, limit, offset int, status string) ([]*User, int, error)
 	SoftDelete(ctx context.Context, id uuid.UUID) error
 	AnonymizePII(ctx context.Context, id uuid.UUID) error
 }

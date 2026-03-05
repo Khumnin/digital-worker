@@ -242,7 +242,7 @@ func (r *PostgresUserRepo) SetLockedUntil(ctx context.Context, id uuid.UUID, unt
 	})
 }
 
-func (r *PostgresUserRepo) ListByTenant(ctx context.Context, limit, offset int) ([]*domain.User, int, error) {
+func (r *PostgresUserRepo) ListByTenant(ctx context.Context, limit, offset int, status string) ([]*domain.User, int, error) {
 	schema, err := pgdb.SchemaFromContext(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -252,16 +252,34 @@ func (r *PostgresUserRepo) ListByTenant(ctx context.Context, limit, offset int) 
 	var total int
 
 	err = pgdb.WithTenantSchema(ctx, r.pool, schema, func(conn *pgx.Conn) error {
-		if countErr := conn.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL").Scan(&total); countErr != nil {
+		// Count query: if filtering by status, the status value is $1.
+		countWhere := "deleted_at IS NULL"
+		var countArgs []interface{}
+		if status != "" {
+			countWhere += " AND status = $1"
+			countArgs = append(countArgs, status)
+		}
+
+		// List query: limit=$1, offset=$2; if filtering by status, status is $3.
+		listWhere := "deleted_at IS NULL"
+		listArgs := []interface{}{limit, offset}
+		if status != "" {
+			listWhere += " AND status = $3"
+			listArgs = append(listArgs, status)
+		}
+
+		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM users WHERE %s", countWhere)
+		if countErr := conn.QueryRow(ctx, countQuery, countArgs...).Scan(&total); countErr != nil {
 			return fmt.Errorf("count users: %w", countErr)
 		}
 
-		rows, queryErr := conn.Query(ctx, `
+		listQuery := fmt.Sprintf(`
 			SELECT id, email, password_hash, status, first_name, last_name,
 			       mfa_enabled, mfa_totp_secret, failed_login_count, locked_until,
 			       email_verified_at, last_login_at, created_at, updated_at, deleted_at
-			FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT $1 OFFSET $2
-		`, limit, offset)
+			FROM users WHERE %s ORDER BY created_at DESC LIMIT $1 OFFSET $2
+		`, listWhere)
+		rows, queryErr := conn.Query(ctx, listQuery, listArgs...)
 		if queryErr != nil {
 			return fmt.Errorf("query users: %w", queryErr)
 		}

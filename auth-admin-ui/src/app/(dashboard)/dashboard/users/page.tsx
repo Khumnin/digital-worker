@@ -10,6 +10,7 @@ import {
   Loader2,
   Users as UsersIcon,
   X,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +71,7 @@ export default function UsersPage() {
     u.id !== authUser?.sub &&
     (!u.system_roles?.includes("super_admin") || isSuperAdmin);
   const [users, setUsers] = useState<User[]>([]);
+  const [pendingCount, setPendingCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -80,15 +82,39 @@ export default function UsersPage() {
     setLoading(true);
     try {
       const token = await getToken();
-      if (!token) return;
-      const usersResult = await userApi.list(token, { page_size: 100 });
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      // When a specific status filter is active, prefer server-side filtering.
+      // Otherwise fetch all users so client-side module filtering still works.
+      const statusParam =
+        statusFilter !== "all" ? statusFilter : undefined;
+
+      const [usersResult, pendingResult] = await Promise.all([
+        userApi.list(token, { page_size: 100, status: statusParam }),
+        // Always fetch the pending count independently so the banner stays
+        // accurate even while another status filter is active.
+        statusFilter !== "pending"
+          ? userApi.list(token, { page: 1, page_size: 1, status: "pending" })
+          : null,
+      ]);
+
       setUsers(usersResult.data);
+      // When the status filter is "pending" the main result already contains
+      // the count; otherwise use the dedicated pending query.
+      setPendingCount(
+        statusFilter === "pending"
+          ? usersResult.total
+          : (pendingResult?.total ?? 0)
+      );
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to load users");
     } finally {
       setLoading(false);
     }
-  }, [getToken]);
+  }, [getToken, statusFilter]);
 
   useEffect(() => {
     load();
@@ -124,16 +150,17 @@ export default function UsersPage() {
 
   const hasActiveFilters = statusFilter !== "all" || moduleFilter !== "all";
 
-  // Client-side filters (backend returns all users; we filter here)
+  // Client-side filters.
+  // When a specific status is selected the API already returns only those
+  // users, so we only apply the status filter locally when showing "all".
   const filtered = users.filter((u) => {
     const matchSearch =
       u.email.toLowerCase().includes(search.toLowerCase()) ||
       (u.display_name ?? "").toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || u.status === statusFilter;
     const matchModule =
       moduleFilter === "all" ||
       Object.keys(u.module_roles ?? {}).includes(moduleFilter);
-    return matchSearch && matchStatus && matchModule;
+    return matchSearch && matchModule;
   });
 
   const statusColor: Record<string, string> = {
@@ -144,6 +171,32 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-4">
+      {/* Pending invitations banner — only shown when there are pending users
+          and the admin is not already viewing the pending filter */}
+      {!loading && pendingCount > 0 && statusFilter !== "pending" && isAdmin && (
+        <button
+          type="button"
+          onClick={() => setStatusFilter("pending")}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-[10px] border border-yellow-200 dark:border-yellow-800/60 bg-yellow-50 dark:bg-yellow-900/20 text-left hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors group"
+          aria-label={`View ${pendingCount} pending invitation${pendingCount !== 1 ? "s" : ""}`}
+        >
+          <span className="flex items-center justify-center w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-800/40 shrink-0">
+            <Mail size={15} className="text-yellow-600 dark:text-yellow-400" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-[#0B1F3A] dark:text-foreground leading-tight">
+              {pendingCount} pending invitation{pendingCount !== 1 ? "s" : ""} awaiting acceptance
+            </p>
+            <p className="text-xs text-semi-grey mt-0.5">
+              Click to filter and view pending users
+            </p>
+          </div>
+          <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-yellow-200 dark:bg-yellow-700 text-yellow-800 dark:text-yellow-200 text-xs font-semibold shrink-0 group-hover:bg-yellow-300 dark:group-hover:bg-yellow-600 transition-colors">
+            {pendingCount}
+          </span>
+        </button>
+      )}
+
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* Search */}

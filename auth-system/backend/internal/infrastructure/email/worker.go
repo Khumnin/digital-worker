@@ -113,6 +113,12 @@ func (w *Worker) buildInvitationMessage(task service.EmailTask) Message {
 		acceptURL += "&tenant=" + task.TenantSlug
 	}
 
+	// Use the tenant's display name; fall back to "TigerSoft" when absent.
+	tenantName := task.TenantName
+	if tenantName == "" {
+		tenantName = "TigerSoft"
+	}
+
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -124,7 +130,7 @@ func (w *Worker) buildInvitationMessage(task service.EmailTask) Message {
         <!-- Header -->
         <tr>
           <td style="background:#C10016;padding:28px 40px;">
-            <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">TigerSoft</span>
+            <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">%s</span>
           </td>
         </tr>
 
@@ -136,7 +142,7 @@ func (w *Worker) buildInvitationMessage(task service.EmailTask) Message {
               Hello %s,
             </p>
             <p style="margin:0 0 28px;font-size:15px;color:#444;line-height:1.6;">
-              You have been invited to join <strong>TigerSoft</strong>. Click the button below to set up your account and get started.
+              You have been invited to join <strong>%s</strong>. Click the button below to set up your account and get started.
             </p>
 
             <!-- CTA Button -->
@@ -167,7 +173,7 @@ func (w *Worker) buildInvitationMessage(task service.EmailTask) Message {
         <tr>
           <td style="padding:20px 40px;border-top:1px solid #f0f0f0;">
             <p style="margin:0;font-size:12px;color:#bbb;text-align:center;">
-              © TigerSoft · This is an automated message, please do not reply.
+              © %s · This is an automated message, please do not reply.
             </p>
           </td>
         </tr>
@@ -176,16 +182,16 @@ func (w *Worker) buildInvitationMessage(task service.EmailTask) Message {
     </td></tr>
   </table>
 </body>
-</html>`, task.ToName, acceptURL, acceptURL, acceptURL, expiryDate)
+</html>`, tenantName, task.ToName, tenantName, acceptURL, acceptURL, acceptURL, expiryDate, tenantName)
 
 	text := fmt.Sprintf(
-		"Hello %s,\n\nYou have been invited to join TigerSoft.\n\nAccept your invitation here:\n%s\n\nThis invitation expires on %s.\n\nIf you did not expect this invitation, please ignore this email.",
-		task.ToName, acceptURL, expiryDate,
+		"Hello %s,\n\nYou have been invited to join %s.\n\nAccept your invitation here:\n%s\n\nThis invitation expires on %s.\n\nIf you did not expect this invitation, please ignore this email.",
+		task.ToName, tenantName, acceptURL, expiryDate,
 	)
 
 	return Message{
 		To:       task.ToEmail,
-		Subject:  "You've been invited to TigerSoft",
+		Subject:  fmt.Sprintf("You've been invited to %s", tenantName),
 		HTMLBody: html,
 		TextBody: text,
 	}
@@ -195,6 +201,11 @@ func (w *Worker) buildVerificationMessage(task service.EmailTask) Message {
 	verifyURL := fmt.Sprintf("%s/verify-email?token=%s", w.cfg.AppURL, task.Token)
 	expiryDate := task.ExpiresAt.Format("2 January 2006 15:04 MST")
 
+	tenantName := task.TenantName
+	if tenantName == "" {
+		tenantName = "TigerSoft"
+	}
+
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"></head>
@@ -203,7 +214,7 @@ func (w *Worker) buildVerificationMessage(task service.EmailTask) Message {
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
         <tr><td style="background:#C10016;padding:28px 40px;">
-          <span style="color:#ffffff;font-size:20px;font-weight:700;">TigerSoft</span>
+          <span style="color:#ffffff;font-size:20px;font-weight:700;">%s</span>
         </td></tr>
         <tr><td style="padding:40px;">
           <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">Verify your email address</h1>
@@ -216,12 +227,12 @@ func (w *Worker) buildVerificationMessage(task service.EmailTask) Message {
           <p style="margin:0;font-size:13px;color:#aaa;">Expires: %s</p>
         </td></tr>
         <tr><td style="padding:20px 40px;border-top:1px solid #f0f0f0;">
-          <p style="margin:0;font-size:12px;color:#bbb;text-align:center;">© TigerSoft · Automated message, do not reply.</p>
+          <p style="margin:0;font-size:12px;color:#bbb;text-align:center;">© %s · Automated message, do not reply.</p>
         </td></tr>
       </table>
     </td></tr>
   </table>
-</body></html>`, task.ToName, verifyURL, expiryDate)
+</body></html>`, tenantName, task.ToName, verifyURL, expiryDate, tenantName)
 
 	return Message{
 		To:       task.ToEmail,
@@ -235,6 +246,11 @@ func (w *Worker) buildPasswordResetMessage(task service.EmailTask) Message {
 	resetURL := fmt.Sprintf("%s/reset-password?token=%s", w.cfg.AppURL, task.Token)
 	expiryDate := task.ExpiresAt.Format("2 January 2006 15:04 MST")
 
+	tenantName := task.TenantName
+	if tenantName == "" {
+		tenantName = "TigerSoft"
+	}
+
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"></head>
@@ -243,7 +259,7 @@ func (w *Worker) buildPasswordResetMessage(task service.EmailTask) Message {
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
         <tr><td style="background:#C10016;padding:28px 40px;">
-          <span style="color:#ffffff;font-size:20px;font-weight:700;">TigerSoft</span>
+          <span style="color:#ffffff;font-size:20px;font-weight:700;">%s</span>
         </td></tr>
         <tr><td style="padding:40px;">
           <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">Reset your password</h1>
@@ -256,12 +272,12 @@ func (w *Worker) buildPasswordResetMessage(task service.EmailTask) Message {
           <p style="margin:0;font-size:13px;color:#aaa;">If you did not request a password reset, ignore this email. Expires: %s</p>
         </td></tr>
         <tr><td style="padding:20px 40px;border-top:1px solid #f0f0f0;">
-          <p style="margin:0;font-size:12px;color:#bbb;text-align:center;">© TigerSoft · Automated message, do not reply.</p>
+          <p style="margin:0;font-size:12px;color:#bbb;text-align:center;">© %s · Automated message, do not reply.</p>
         </td></tr>
       </table>
     </td></tr>
   </table>
-</body></html>`, task.ToName, resetURL, expiryDate)
+</body></html>`, tenantName, task.ToName, resetURL, expiryDate, tenantName)
 
 	return Message{
 		To:       task.ToEmail,

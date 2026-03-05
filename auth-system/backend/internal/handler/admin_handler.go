@@ -207,7 +207,21 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 
 	offset := (page - 1) * pageSize
 
-	users, total, err := h.adminSvc.ListUsers(c.Request.Context(), pageSize, offset)
+	// Optional status filter. Validate the raw API value before accepting it.
+	// Accepted values: "pending", "inactive", "active", "all" (empty string → no filter).
+	rawStatus := c.Query("status")
+	if rawStatus != "" && rawStatus != "pending" && rawStatus != "inactive" && rawStatus != "active" && rawStatus != "all" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status filter; accepted values: pending, inactive, active, all"})
+		return
+	}
+	if rawStatus == "all" {
+		rawStatus = ""
+	}
+
+	// Denormalize API status values to internal DB values before querying.
+	statusFilter := denormalizeUserStatus(rawStatus)
+
+	users, total, err := h.adminSvc.ListUsers(c.Request.Context(), pageSize, offset, statusFilter)
 	if err != nil {
 		respondWithServiceError(c, err)
 		return

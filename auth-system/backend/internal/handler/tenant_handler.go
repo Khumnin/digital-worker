@@ -476,7 +476,7 @@ func (h *TenantHandler) ListTenantUsers(c *gin.Context) {
 	ctx := context.WithValue(c.Request.Context(), pginfra.CtxKeySchemaName, tenant.SchemaName)
 	ctx = context.WithValue(ctx, pginfra.CtxKeyTenantID, tenant.Slug)
 
-	users, total, err := h.adminSvc.ListUsers(ctx, pageSize, offset)
+	users, total, err := h.adminSvc.ListUsers(ctx, pageSize, offset, "")
 	if err != nil {
 		respondWithServiceError(c, err)
 		return

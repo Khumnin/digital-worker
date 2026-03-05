@@ -156,11 +156,12 @@ func (s *authServiceImpl) Register(ctx context.Context, input RegisterInput) (*R
 	}
 
 	s.enqueueEmail(EmailTask{
-		Type:      EmailTypeVerification,
-		ToEmail:   user.Email,
-		ToName:    user.FullName(),
-		Token:     rawToken,
-		ExpiresAt: expiresAt,
+		Type:       EmailTypeVerification,
+		ToEmail:    user.Email,
+		ToName:     user.FullName(),
+		Token:      rawToken,
+		ExpiresAt:  expiresAt,
+		TenantName: tenant.Name,
 	})
 
 	s.writeAuditEvent(ctx, domain.AuditEvent{
@@ -478,6 +479,7 @@ type EmailTask struct {
 	Token      string
 	ExpiresAt  time.Time
 	TenantSlug string // used to build tenant-scoped accept-invite / verify URLs
+	TenantName string // display name of the tenant, used in email copy
 	Extra      map[string]interface{}
 }
 

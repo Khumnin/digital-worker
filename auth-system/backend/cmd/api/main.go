@@ -136,7 +136,7 @@ func run() error {
 		userRepo, tokenRepo, auditRepo, emailChannel, cfg.Email.VerificationTokenTTL,
 	)
 	passwordSvc := service.NewPasswordService(
-		userRepo, sessionRepo, tokenRepo, auditRepo, emailChannel, cfg.Email.PasswordResetTokenTTL,
+		userRepo, sessionRepo, tokenRepo, auditRepo, tenantRepo, emailChannel, cfg.Email.PasswordResetTokenTTL,
 	)
 	sessionSvc := service.NewSessionService(
 		userRepo, sessionRepo, auditRepo, roleRepo, keyStore, cfg.JWT.AccessTokenTTL,
@@ -147,11 +147,11 @@ func run() error {
 	)
 	rbacSvc := service.NewRBACService(roleRepo, userRepo, auditRepo)
 
-	// AdminService now requires mfaRepo, socialAccountRepo, and codeRepo to
-	// perform full GDPR erasure (EraseUser) instead of simple soft-delete.
+	// AdminService now requires mfaRepo, socialAccountRepo, codeRepo, and tenantRepo
+	// to perform full GDPR erasure (EraseUser) and resolve tenant display names in emails.
 	adminSvc := service.NewAdminService(
 		userRepo, sessionRepo, roleRepo, auditRepo,
-		mfaRepo, socialAccountRepo, oauthCodeRepo, emailChannel,
+		mfaRepo, socialAccountRepo, oauthCodeRepo, tenantRepo, emailChannel,
 	)
 	adminSvc = service.WithTokenRepo(adminSvc, tokenRepo)
 

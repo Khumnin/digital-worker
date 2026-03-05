@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"tigersoft/auth-system/internal/domain"
+	pgdb "tigersoft/auth-system/internal/infrastructure/postgres"
 	"tigersoft/auth-system/pkg/crypto"
 )
 
@@ -20,12 +21,13 @@ type PasswordService interface {
 }
 
 type passwordServiceImpl struct {
-	userRepo       domain.UserRepository
-	sessionRepo    domain.SessionRepository
-	tokenRepo      domain.TokenRepository
-	auditRepo      domain.AuditRepository
-	emailCh        chan<- EmailTask
-	resetTokenTTL  time.Duration
+	userRepo      domain.UserRepository
+	sessionRepo   domain.SessionRepository
+	tokenRepo     domain.TokenRepository
+	auditRepo     domain.AuditRepository
+	tenantRepo    domain.TenantRepository
+	emailCh       chan<- EmailTask
+	resetTokenTTL time.Duration
 }
 
 // NewPasswordService constructs a PasswordService with all dependencies
@@ -35,6 +37,7 @@ func NewPasswordService(
 	sessionRepo domain.SessionRepository,
 	tokenRepo domain.TokenRepository,
 	auditRepo domain.AuditRepository,
+	tenantRepo domain.TenantRepository,
 	emailCh chan<- EmailTask,
 	resetTokenTTL time.Duration,
 ) PasswordService {
@@ -43,6 +46,7 @@ func NewPasswordService(
 		sessionRepo:   sessionRepo,
 		tokenRepo:     tokenRepo,
 		auditRepo:     auditRepo,
+		tenantRepo:    tenantRepo,
 		emailCh:       emailCh,
 		resetTokenTTL: resetTokenTTL,
 	}
@@ -72,12 +76,25 @@ func (s *passwordServiceImpl) ForgotPassword(ctx context.Context, email string) 
 		return fmt.Errorf("store reset token: %w", err)
 	}
 
+	// Resolve the tenant display name for the email template.
+	// A lookup failure here is non-fatal — fall back to the default.
+	tenantName := ""
+	if tenantID, ok := ctx.Value(pgdb.CtxKeyTenantID).(string); ok && tenantID != "" {
+		if tenant, tenantErr := s.tenantRepo.FindBySlug(ctx, tenantID); tenantErr == nil {
+			tenantName = tenant.Name
+		} else {
+			slog.Warn("forgot-password: could not resolve tenant name for email",
+				"tenant_id", tenantID, "error", tenantErr)
+		}
+	}
+
 	s.enqueueEmail(EmailTask{
-		Type:      EmailTypePasswordReset,
-		ToEmail:   user.Email,
-		ToName:    user.FullName(),
-		Token:     rawToken,
-		ExpiresAt: expiresAt,
+		Type:       EmailTypePasswordReset,
+		ToEmail:    user.Email,
+		ToName:     user.FullName(),
+		Token:      rawToken,
+		ExpiresAt:  expiresAt,
+		TenantName: tenantName,
 	})
 
 	s.writeAuditEvent(ctx, domain.AuditEvent{
