@@ -27,9 +27,14 @@ func NewTenantHandler(svc service.TenantService, adminSvc service.AdminService) 
 }
 
 type provisionTenantRequest struct {
-	Name       string `json:"name"        validate:"required,min=2,max=100"`
-	Slug       string `json:"slug"        validate:"required,min=3,max=50"`
-	AdminEmail string `json:"admin_email" validate:"required,email"`
+	Name       string               `json:"name"        validate:"required,min=2,max=100"`
+	Slug       string               `json:"slug"        validate:"required,min=3,max=50"`
+	AdminEmail string               `json:"admin_email" validate:"required,email"`
+	Config     *tenantConfigRequest `json:"config"`
+}
+
+type tenantConfigRequest struct {
+	EnabledModules []string `json:"enabled_modules"`
 }
 
 // ProvisionTenant handles POST /api/v1/admin/tenants.
@@ -41,14 +46,25 @@ func (h *TenantHandler) ProvisionTenant(c *gin.Context) {
 		return
 	}
 
+	var enabledMods []string
+	if req.Config != nil {
+		enabledMods = req.Config.EnabledModules
+	}
+
 	tenant, err := h.tenantSvc.ProvisionTenant(c.Request.Context(), service.ProvisionTenantInput{
-		Name:       req.Name,
-		Slug:       req.Slug,
-		AdminEmail: req.AdminEmail,
+		Name:           req.Name,
+		Slug:           req.Slug,
+		AdminEmail:     req.AdminEmail,
+		EnabledModules: enabledMods,
 	})
 	if err != nil {
 		respondWithServiceError(c, err)
 		return
+	}
+
+	provisionedModules := tenant.Config.EnabledModules
+	if provisionedModules == nil {
+		provisionedModules = []string{}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
@@ -56,7 +72,7 @@ func (h *TenantHandler) ProvisionTenant(c *gin.Context) {
 		"name":            tenant.Name,
 		"slug":            tenant.Slug,
 		"status":          string(tenant.Status),
-		"enabled_modules": []string{},
+		"enabled_modules": provisionedModules,
 		"created_at":      tenant.CreatedAt,
 	})
 }
@@ -71,12 +87,17 @@ func (h *TenantHandler) GetTenant(c *gin.Context) {
 		return
 	}
 
+	enabledModules := tenant.Config.EnabledModules
+	if enabledModules == nil {
+		enabledModules = []string{}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"id":              tenant.ID.String(),
 		"name":            tenant.Name,
 		"slug":            tenant.Slug,
 		"status":          string(tenant.Status),
-		"enabled_modules": []string{},
+		"enabled_modules": enabledModules,
 		"created_at":      tenant.CreatedAt,
 	})
 }
@@ -104,12 +125,16 @@ func (h *TenantHandler) ListTenants(c *gin.Context) {
 
 	items := make([]gin.H, len(tenants))
 	for i, t := range tenants {
+		mods := t.Config.EnabledModules
+		if mods == nil {
+			mods = []string{}
+		}
 		items[i] = gin.H{
 			"id":              t.ID.String(),
 			"name":            t.Name,
 			"slug":            t.Slug,
 			"status":          string(t.Status),
-			"enabled_modules": []string{},
+			"enabled_modules": mods,
 			"created_at":      t.CreatedAt,
 		}
 	}

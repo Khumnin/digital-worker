@@ -39,9 +39,10 @@ type TenantService interface {
 
 // ProvisionTenantInput carries the fields required to create a new tenant.
 type ProvisionTenantInput struct {
-	Name       string
-	Slug       string
-	AdminEmail string
+	Name           string
+	Slug           string
+	AdminEmail     string
+	EnabledModules []string
 }
 
 type tenantServiceImpl struct {
@@ -79,11 +80,14 @@ func (s *tenantServiceImpl) ProvisionTenant(ctx context.Context, input Provision
 		return nil, fmt.Errorf("invalid slug: %w", err)
 	}
 
+	cfg := domain.DefaultTenantConfig()
+	cfg.EnabledModules = input.EnabledModules
+
 	tenant, err := s.tenantRepo.Create(ctx, domain.CreateTenantInput{
 		Name:       input.Name,
 		Slug:       input.Slug,
 		AdminEmail: input.AdminEmail,
-		Config:     domain.DefaultTenantConfig(),
+		Config:     cfg,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create tenant record: %w", err)
