@@ -52,7 +52,19 @@
       "Bash(git push:*)",
       "Bash(gh pr:*)",
       "Bash(kubectl version:*)",
-      "Bash(kubectl:*)"
+      "Bash(kubectl:*)",
+      "Bash(git merge:*)",
+      "Bash(git stash:*)",
+      "Bash(npx tsc:*)",
+      "Bash(echo:*)",
+      "Read(//Users/kanatekhumnin/.config/glab-cli/**)",
+      "Read(//Users/kanatekhumnin/**)",
+      "Bash(security find-internet-password:*)",
+      "Bash(git credential:*)",
+      "Bash(__NEW_LINE_593639d5de4424b5__ curl:*)",
+      "Bash(__NEW_LINE_ab96f3da449d3258__ curl:*)",
+      "Bash(cat:*)",
+      "Bash(docker info:*)"
     ]
   },
   "statusLine": {
