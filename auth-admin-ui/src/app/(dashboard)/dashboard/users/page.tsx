@@ -176,16 +176,19 @@ export default function UsersPage() {
   const hasActiveFilters = statusFilter !== "all" || moduleFilter !== "all";
 
   // Client-side filters.
-  // When a specific status is selected the API already returns only those
-  // users, so we only apply the status filter locally when showing "all".
+  // The API already applies the status filter server-side when a specific
+  // status is selected, but we re-apply it here as a defense-in-depth safety
+  // net: if the backend returns unfiltered results the UI still shows the
+  // correct subset.
   const filtered = users.filter((u) => {
     const matchSearch =
       u.email.toLowerCase().includes(search.toLowerCase()) ||
       (u.display_name ?? "").toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === "all" || u.status === statusFilter;
     const matchModule =
       moduleFilter === "all" ||
       Object.keys(u.module_roles ?? {}).includes(moduleFilter);
-    return matchSearch && matchModule;
+    return matchSearch && matchStatus && matchModule;
   });
 
   const statusColor: Record<string, string> = {
@@ -380,6 +383,9 @@ export default function UsersPage() {
             <TableHeader>
               <TableRow className="bg-[#fafafa] dark:bg-[#1a2332] hover:bg-[#fafafa] dark:hover:bg-[#1a2332]">
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">User</TableHead>
+                {isSuperAdmin && (
+                  <TableHead className="text-xs font-semibold text-semi-grey uppercase">Tenant</TableHead>
+                )}
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">Roles</TableHead>
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">Status</TableHead>
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">Joined</TableHead>
@@ -401,6 +407,15 @@ export default function UsersPage() {
                       <p className="text-xs text-semi-grey">{user.email}</p>
                     </div>
                   </TableCell>
+                  {isSuperAdmin && (
+                    <TableCell>
+                      <span className="text-sm text-semi-black">
+                        {user.tenant_name || (
+                          <span className="text-semi-grey">—</span>
+                        )}
+                      </span>
+                    </TableCell>
+                  )}
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {(user.system_roles ?? []).map((roleName) => (
@@ -500,6 +515,7 @@ export default function UsersPage() {
                 user={user}
                 isAdmin={isAdmin}
                 canSuspend={canSuspend(user)}
+                showTenant={isSuperAdmin}
                 statusColor={statusColor}
                 onView={(id) => router.push(`/dashboard/users/${id}`)}
                 onSuspend={handleSuspend}

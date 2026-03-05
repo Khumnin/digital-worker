@@ -452,6 +452,8 @@ func (h *TenantHandler) InviteAdminToTenant(c *gin.Context) {
 
 // ListTenantUsers handles GET /api/v1/admin/tenants/:id/users.
 // Returns the list of users in the specified tenant's schema (cross-tenant read).
+// Supports an optional ?status= filter using the same API contract values as
+// GET /api/v1/admin/users: "pending", "inactive", "active", "all".
 func (h *TenantHandler) ListTenantUsers(c *gin.Context) {
 	tenantID := c.Param("id")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -465,6 +467,17 @@ func (h *TenantHandler) ListTenantUsers(c *gin.Context) {
 	}
 	offset := (page - 1) * pageSize
 
+	// Optional status filter — same validation and denormalization as AdminHandler.ListUsers.
+	rawStatus := c.Query("status")
+	if rawStatus != "" && rawStatus != "pending" && rawStatus != "inactive" && rawStatus != "active" && rawStatus != "all" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status filter; accepted values: pending, inactive, active, all"})
+		return
+	}
+	if rawStatus == "all" {
+		rawStatus = ""
+	}
+	statusFilter := denormalizeUserStatus(rawStatus)
+
 	tenant, err := h.tenantSvc.GetTenant(c.Request.Context(), tenantID)
 	if err != nil {
 		respondWithServiceError(c, err)
@@ -475,7 +488,7 @@ func (h *TenantHandler) ListTenantUsers(c *gin.Context) {
 	ctx := context.WithValue(c.Request.Context(), pginfra.CtxKeySchemaName, tenant.SchemaName)
 	ctx = context.WithValue(ctx, pginfra.CtxKeyTenantID, tenant.Slug)
 
-	users, total, err := h.adminSvc.ListUsers(ctx, pageSize, offset, "")
+	users, total, err := h.adminSvc.ListUsers(ctx, pageSize, offset, statusFilter)
 	if err != nil {
 		respondWithServiceError(c, err)
 		return
@@ -483,7 +496,7 @@ func (h *TenantHandler) ListTenantUsers(c *gin.Context) {
 
 	items := make([]gin.H, len(users))
 	for i, uwr := range users {
-		items[i] = buildUserResponse(uwr, tenantID)
+		items[i] = buildUserResponse(uwr, tenantID, tenant.Name)
 	}
 
 	totalPages := total / pageSize

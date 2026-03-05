@@ -351,3 +351,375 @@ func TestInviteUser_InvalidEmail_ReturnsInvalidEmail(t *testing.T) {
 		t.Errorf("expected ErrInvalidEmail, got: %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// stubRoleRepoWithData for ListAllAdmins tests
+// ---------------------------------------------------------------------------
+
+// stubRoleRepoWithData returns configurable roles for a given user.
+type stubRoleRepoWithData struct {
+	rolesByUserID map[uuid.UUID][]*domain.Role
+}
+
+func (r *stubRoleRepoWithData) FindByID(_ context.Context, _ uuid.UUID) (*domain.Role, error) {
+	return nil, nil
+}
+func (r *stubRoleRepoWithData) FindByName(_ context.Context, name string) (*domain.Role, error) {
+	return &domain.Role{ID: uuid.New(), Name: name}, nil
+}
+func (r *stubRoleRepoWithData) ListAll(_ context.Context) ([]*domain.Role, error)   { return nil, nil }
+func (r *stubRoleRepoWithData) Create(_ context.Context, _, _ string, _ *string) (*domain.Role, error) {
+	return nil, nil
+}
+func (r *stubRoleRepoWithData) Delete(_ context.Context, _ uuid.UUID) error { return nil }
+func (r *stubRoleRepoWithData) IsAssignedToAnyUser(_ context.Context, _ uuid.UUID) (bool, error) {
+	return false, nil
+}
+func (r *stubRoleRepoWithData) AssignToUser(_ context.Context, _, _, _ uuid.UUID) error  { return nil }
+func (r *stubRoleRepoWithData) UnassignFromUser(_ context.Context, _, _ uuid.UUID) error { return nil }
+func (r *stubRoleRepoWithData) GetUserRoles(_ context.Context, id uuid.UUID) ([]*domain.Role, error) {
+	return r.rolesByUserID[id], nil
+}
+func (r *stubRoleRepoWithData) GetUserRolesBatch(_ context.Context, ids []uuid.UUID) (map[uuid.UUID][]*domain.Role, error) {
+	result := make(map[uuid.UUID][]*domain.Role)
+	for _, id := range ids {
+		if roles, ok := r.rolesByUserID[id]; ok {
+			result[id] = roles
+		}
+	}
+	return result, nil
+}
+func (r *stubRoleRepoWithData) ReplaceUserRoles(_ context.Context, _ uuid.UUID, _ []uuid.UUID, _ uuid.UUID) error {
+	return nil
+}
+
+// stubUserRepoWithData returns configurable users per schema context.
+// The schema name is ignored — all users are returned for any schema call.
+type stubUserRepoWithData struct {
+	users []*domain.User
+}
+
+func (r *stubUserRepoWithData) FindByEmail(_ context.Context, _ string) (*domain.User, error) {
+	return nil, domain.ErrUserNotFound
+}
+func (r *stubUserRepoWithData) FindByID(_ context.Context, id uuid.UUID) (*domain.User, error) {
+	for _, u := range r.users {
+		if u.ID == id {
+			return u, nil
+		}
+	}
+	return nil, domain.ErrUserNotFound
+}
+func (r *stubUserRepoWithData) Create(_ context.Context, in domain.CreateUserInput) (*domain.User, error) {
+	return nil, nil
+}
+func (r *stubUserRepoWithData) Update(_ context.Context, _ uuid.UUID, _ domain.UpdateUserInput) (*domain.User, error) {
+	return nil, nil
+}
+func (r *stubUserRepoWithData) IncrementFailedLoginCount(_ context.Context, _ uuid.UUID) (int, error) {
+	return 0, nil
+}
+func (r *stubUserRepoWithData) ResetFailedLoginCount(_ context.Context, _ uuid.UUID) error { return nil }
+func (r *stubUserRepoWithData) SetLockedUntil(_ context.Context, _ uuid.UUID, _ time.Time) error {
+	return nil
+}
+func (r *stubUserRepoWithData) ListByTenant(_ context.Context, limit, offset int, status string) ([]*domain.User, int, error) {
+	filtered := make([]*domain.User, 0, len(r.users))
+	for _, u := range r.users {
+		if status == "" || string(u.Status) == status {
+			filtered = append(filtered, u)
+		}
+	}
+	return filtered, len(filtered), nil
+}
+func (r *stubUserRepoWithData) SoftDelete(_ context.Context, _ uuid.UUID) error   { return nil }
+func (r *stubUserRepoWithData) AnonymizePII(_ context.Context, _ uuid.UUID) error { return nil }
+
+// newTestAdminServiceFull builds an AdminService with a real tenant repo and
+// configurable role data — used for ListAllAdmins tests.
+func newTestAdminServiceFull(userRepo domain.UserRepository, roleRepo domain.RoleRepository, tenantRepo domain.TenantRepository) service.AdminService {
+	emailCh := make(chan service.EmailTask, 10)
+	return service.NewAdminService(
+		userRepo,
+		&stubSessionRepo{},
+		roleRepo,
+		&stubAuditRepo{},
+		&stubMFARepo{},
+		&stubSocialAccountRepo{},
+		&stubAuthCodeRepo{},
+		tenantRepo,
+		emailCh,
+	)
+}
+
+// ---------------------------------------------------------------------------
+// ListUsers status-filter tests (service layer)
+// ---------------------------------------------------------------------------
+
+// statusFilterUserRepo is a variant of stubUserRepoWithData that records the
+// status argument passed to ListByTenant so tests can assert it was forwarded.
+type statusFilterUserRepo struct {
+	stubUserRepoWithData
+	capturedStatus string
+}
+
+func (r *statusFilterUserRepo) ListByTenant(_ context.Context, limit, offset int, status string) ([]*domain.User, int, error) {
+	r.capturedStatus = status
+	return r.stubUserRepoWithData.ListByTenant(context.Background(), limit, offset, status)
+}
+
+// TC-7: ListUsers with status="unverified" forwards the filter to the repo and
+// returns only matching users.
+func TestListUsers_StatusFilter_ForwardedToRepo(t *testing.T) {
+	pendingID := uuid.New()
+	activeID := uuid.New()
+
+	repo := &statusFilterUserRepo{
+		stubUserRepoWithData: stubUserRepoWithData{
+			users: []*domain.User{
+				{ID: pendingID, Email: "pending@example.com", Status: domain.UserStatusUnverified},
+				{ID: activeID, Email: "active@example.com", Status: domain.UserStatusActive},
+			},
+		},
+	}
+
+	emailCh := make(chan service.EmailTask, 10)
+	svc := service.NewAdminService(
+		repo,
+		&stubSessionRepo{},
+		&stubRoleRepo{},
+		&stubAuditRepo{},
+		&stubMFARepo{},
+		&stubSocialAccountRepo{},
+		&stubAuthCodeRepo{},
+		nil,
+		emailCh,
+	)
+
+	cases := []struct {
+		name           string
+		statusArg      string
+		wantCount      int
+		wantRepoStatus string
+	}{
+		{
+			name:           "no filter returns all users",
+			statusArg:      "",
+			wantCount:      2,
+			wantRepoStatus: "",
+		},
+		{
+			name:           "unverified filter returns only pending users",
+			statusArg:      "unverified",
+			wantCount:      1,
+			wantRepoStatus: "unverified",
+		},
+		{
+			name:           "active filter returns only active users",
+			statusArg:      "active",
+			wantCount:      1,
+			wantRepoStatus: "active",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo.capturedStatus = "" // reset between runs
+
+			users, total, err := svc.ListUsers(context.Background(), 100, 0, tc.statusArg)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if total != tc.wantCount {
+				t.Errorf("total: got %d, want %d", total, tc.wantCount)
+			}
+			if len(users) != tc.wantCount {
+				t.Errorf("len(users): got %d, want %d", len(users), tc.wantCount)
+			}
+			if repo.capturedStatus != tc.wantRepoStatus {
+				t.Errorf("repo received status=%q, want %q", repo.capturedStatus, tc.wantRepoStatus)
+			}
+		})
+	}
+}
+
+// TC-8: ListUsers with status filter returns correct total (used by the
+// pending-count banner on the frontend).
+func TestListUsers_PendingCount_ReflectsOnlyPendingUsers(t *testing.T) {
+	repo := &statusFilterUserRepo{
+		stubUserRepoWithData: stubUserRepoWithData{
+			users: []*domain.User{
+				{ID: uuid.New(), Email: "p1@example.com", Status: domain.UserStatusUnverified},
+				{ID: uuid.New(), Email: "a1@example.com", Status: domain.UserStatusActive},
+				{ID: uuid.New(), Email: "a2@example.com", Status: domain.UserStatusActive},
+				{ID: uuid.New(), Email: "d1@example.com", Status: domain.UserStatusDisabled},
+			},
+		},
+	}
+
+	emailCh := make(chan service.EmailTask, 10)
+	svc := service.NewAdminService(
+		repo,
+		&stubSessionRepo{},
+		&stubRoleRepo{},
+		&stubAuditRepo{},
+		&stubMFARepo{},
+		&stubSocialAccountRepo{},
+		&stubAuthCodeRepo{},
+		nil,
+		emailCh,
+	)
+
+	// Simulate the banner call: page_size=1, status="unverified".
+	_, total, err := svc.ListUsers(context.Background(), 1, 0, "unverified")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Only 1 user has status=unverified — total must be 1, not 4.
+	if total != 1 {
+		t.Errorf("pending count: got %d, want 1 — status filter not applied to total", total)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ListAllAdmins tests
+// ---------------------------------------------------------------------------
+
+// TC-9: Returns only admin/super_admin users across all active tenants.
+func TestListAllAdmins_ReturnsOnlyAdminUsers(t *testing.T) {
+	adminID := uuid.New()
+	regularID := uuid.New()
+	superAdminID := uuid.New()
+
+	userRepo := &stubUserRepoWithData{
+		users: []*domain.User{
+			{ID: adminID, Email: "admin@example.com", Status: domain.UserStatusActive},
+			{ID: regularID, Email: "user@example.com", Status: domain.UserStatusActive},
+			{ID: superAdminID, Email: "super@example.com", Status: domain.UserStatusActive},
+		},
+	}
+
+	roleRepo := &stubRoleRepoWithData{
+		rolesByUserID: map[uuid.UUID][]*domain.Role{
+			adminID:      {{ID: uuid.New(), Name: "admin"}},
+			regularID:    {{ID: uuid.New(), Name: "user"}},
+			superAdminID: {{ID: uuid.New(), Name: "super_admin"}},
+		},
+	}
+
+	tenantRepo := newStubTenantRepo()
+	tenantRepo.seed(&domain.Tenant{
+		ID:         uuid.New(),
+		Slug:       "acme",
+		Name:       "ACME Corp",
+		SchemaName: "tenant_acme",
+		Status:     domain.TenantStatusActive,
+	})
+
+	svc := newTestAdminServiceFull(userRepo, roleRepo, tenantRepo)
+
+	results, total, err := svc.ListAllAdmins(context.Background(), 100, 0, "")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if total != 2 {
+		t.Errorf("expected total=2 (admin+super_admin), got %d", total)
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 results, got %d", len(results))
+	}
+	for _, uwr := range results {
+		if uwr.TenantID != "acme" {
+			t.Errorf("expected TenantID=acme, got %q", uwr.TenantID)
+		}
+		if uwr.TenantName != "ACME Corp" {
+			t.Errorf("expected TenantName=ACME Corp, got %q", uwr.TenantName)
+		}
+	}
+}
+
+// TC-8: Suspended tenants are skipped.
+func TestListAllAdmins_SkipsSuspendedTenants(t *testing.T) {
+	adminID := uuid.New()
+
+	userRepo := &stubUserRepoWithData{
+		users: []*domain.User{
+			{ID: adminID, Email: "admin@example.com", Status: domain.UserStatusActive},
+		},
+	}
+	roleRepo := &stubRoleRepoWithData{
+		rolesByUserID: map[uuid.UUID][]*domain.Role{
+			adminID: {{ID: uuid.New(), Name: "admin"}},
+		},
+	}
+
+	tenantRepo := newStubTenantRepo()
+	tenantRepo.seed(&domain.Tenant{
+		ID:         uuid.New(),
+		Slug:       "suspendedco",
+		Name:       "Suspended Co",
+		SchemaName: "tenant_suspendedco",
+		Status:     domain.TenantStatusSuspended,
+	})
+
+	svc := newTestAdminServiceFull(userRepo, roleRepo, tenantRepo)
+
+	results, total, err := svc.ListAllAdmins(context.Background(), 100, 0, "")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if total != 0 {
+		t.Errorf("expected total=0 (suspended tenant skipped), got %d", total)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results, got %d", len(results))
+	}
+}
+
+// TC-9: In-memory pagination works correctly.
+func TestListAllAdmins_PaginationApplied(t *testing.T) {
+	ids := [3]uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+	users := make([]*domain.User, 3)
+	rolesByUser := make(map[uuid.UUID][]*domain.Role, 3)
+	for i := 0; i < 3; i++ {
+		users[i] = &domain.User{ID: ids[i], Email: "admin@example.com", Status: domain.UserStatusActive}
+		rolesByUser[ids[i]] = []*domain.Role{{ID: uuid.New(), Name: "admin"}}
+	}
+
+	userRepo := &stubUserRepoWithData{users: users}
+	roleRepo := &stubRoleRepoWithData{rolesByUserID: rolesByUser}
+
+	tenantRepo := newStubTenantRepo()
+	tenantRepo.seed(&domain.Tenant{
+		ID:         uuid.New(),
+		Slug:       "bigcorp",
+		Name:       "Big Corp",
+		SchemaName: "tenant_bigcorp",
+		Status:     domain.TenantStatusActive,
+	})
+
+	svc := newTestAdminServiceFull(userRepo, roleRepo, tenantRepo)
+
+	// Page 1: limit=2, offset=0
+	page1, total, err := svc.ListAllAdmins(context.Background(), 2, 0, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if total != 3 {
+		t.Errorf("expected total=3, got %d", total)
+	}
+	if len(page1) != 2 {
+		t.Errorf("expected 2 results on page 1, got %d", len(page1))
+	}
+
+	// Page 2: limit=2, offset=2
+	page2, _, err := svc.ListAllAdmins(context.Background(), 2, 2, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(page2) != 1 {
+		t.Errorf("expected 1 result on page 2, got %d", len(page2))
+	}
+}

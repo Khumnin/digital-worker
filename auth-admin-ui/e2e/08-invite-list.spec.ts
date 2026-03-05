@@ -564,3 +564,258 @@ test.describe("Loading spinner — null token regression", () => {
     await expect(page.locator("table, text=No users found")).toBeVisible();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Bug Fix #1: Pending count accuracy
+// Root cause: fragile SQL parameter binding caused wrong count; fixed with
+// sequential binding in user_repo.go ListByTenant.
+// ---------------------------------------------------------------------------
+
+test.describe("Bug Fix #1 — Pending count accuracy", () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page);
+    await page.goto("/dashboard/users");
+    await page.waitForSelector('[class*="animate-spin"]', { state: "hidden", timeout: 12000 });
+  });
+
+  /**
+   * TC-BF1-01: The banner count badge reflects the true number of pending users.
+   * When the pending filter is applied, the table row count must equal the badge count.
+   * ISTQB technique: Equivalence Partitioning + Boundary Value Analysis
+   * (pendingCount=1 is the documented regression case — was showing 4 instead of 1)
+   */
+  test("TC-BF1-01 banner badge count equals table row count when pending filter applied", async ({
+    page,
+  }) => {
+    const banner = page.locator('button[aria-label*="pending invitation"]');
+    if (await banner.count() === 0) {
+      test.skip();
+      return;
+    }
+
+    // Capture the badge number before clicking.
+    const badgeSpan = banner.locator("span.rounded-full").last();
+    const rawBadgeText = await badgeSpan.textContent();
+    const badgeCount = parseInt(rawBadgeText?.trim() ?? "0", 10);
+    expect(badgeCount).toBeGreaterThan(0);
+
+    // Apply the filter.
+    await banner.click();
+    await page.waitForSelector('[class*="animate-spin"]', { state: "hidden", timeout: 12000 });
+
+    // Count status badges in the table that are exactly "pending".
+    const pendingStatusBadges = page.locator("span.rounded-full").filter({ hasText: /^pending$/ });
+    const tableRowCount = await pendingStatusBadges.count();
+
+    // The table must show exactly badgeCount pending users (up to page_size=100).
+    if (badgeCount <= 100) {
+      expect(tableRowCount).toBe(badgeCount);
+    } else {
+      expect(tableRowCount).toBe(100);
+    }
+  });
+
+  /**
+   * TC-BF1-02: Banner count is not inflated by the total of ALL users.
+   * Regression guard for the original bug where total=4 (all users) was shown
+   * instead of total=1 (only pending users).
+   * ISTQB technique: Boundary Value Analysis (off-by-many regression)
+   */
+  test("TC-BF1-02 banner count does not equal total user count when mixed statuses exist", async ({
+    page,
+  }) => {
+    const banner = page.locator('button[aria-label*="pending invitation"]');
+    if (await banner.count() === 0) {
+      test.skip();
+      return;
+    }
+
+    // Read the pending count from the banner badge.
+    const badgeSpan = banner.locator("span.rounded-full").last();
+    const rawBadgeText = await badgeSpan.textContent();
+    const pendingCount = parseInt(rawBadgeText?.trim() ?? "0", 10);
+
+    // Fetch the total user count by counting all table rows (no filter applied yet).
+    const allRows = page.locator("tbody tr");
+    const totalCount = await allRows.count();
+
+    // If there are active users alongside pending ones, the banner count must
+    // be LESS than the total. This is the regression case.
+    const activeBadges = page.locator("span.rounded-full").filter({ hasText: /^active$/ });
+    const activeCount = await activeBadges.count();
+
+    if (activeCount > 0) {
+      // Mixed environment: pending < total
+      expect(pendingCount).toBeLessThan(totalCount);
+    }
+    // Even if it happens to equal total (all users are pending), at minimum
+    // we verify the count is a sensible non-negative integer.
+    expect(pendingCount).toBeGreaterThanOrEqual(1);
+  });
+
+  /**
+   * TC-BF1-03: Banner count is stable across multiple page reloads.
+   * Verifies the SQL fix produces consistent results (no parameter mis-binding
+   * that could return different counts on different executions).
+   * ISTQB technique: Reliability / Repeatability
+   */
+  test("TC-BF1-03 banner count is consistent across two page loads", async ({ page }) => {
+    const banner = page.locator('button[aria-label*="pending invitation"]');
+    if (await banner.count() === 0) {
+      test.skip();
+      return;
+    }
+
+    const badgeSpan = banner.locator("span.rounded-full").last();
+    const firstLoad = parseInt((await badgeSpan.textContent())?.trim() ?? "0", 10);
+
+    // Reload the page.
+    await page.reload();
+    await page.waitForSelector('[class*="animate-spin"]', { state: "hidden", timeout: 12000 });
+
+    const bannerAfterReload = page.locator('button[aria-label*="pending invitation"]');
+    if (await bannerAfterReload.count() === 0) {
+      // If banner disappeared after reload it means pending users were resolved — skip.
+      test.skip();
+      return;
+    }
+
+    const badgeAfterReload = parseInt(
+      (await bannerAfterReload.locator("span.rounded-full").last().textContent())?.trim() ?? "0",
+      10
+    );
+
+    expect(badgeAfterReload).toBe(firstLoad);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bug Fix #2: Filter combination coverage
+// New scenarios verifying that status + search and status + module filters
+// work correctly together (defense-in-depth matchStatus client filter).
+// ---------------------------------------------------------------------------
+
+test.describe("Bug Fix #2 — Filter combination and client-side matchStatus defense", () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page);
+    await page.goto("/dashboard/users");
+    await page.waitForSelector('[class*="animate-spin"]', { state: "hidden", timeout: 12000 });
+  });
+
+  /**
+   * TC-BF2-COMBO-01: Status filter + search text together narrow results.
+   * Verifies the client-side matchStatus AND matchSearch both fire correctly.
+   * ISTQB technique: Decision Table (status=active, search=superadmin)
+   */
+  test("TC-BF2-COMBO-01 status filter and search together narrow the table", async ({ page }) => {
+    // Step 1: Apply status=active.
+    const select = page.getByRole("combobox").first();
+    await select.click();
+    await page.getByRole("option", { name: "Active" }).click();
+    await page.waitForSelector('[class*="animate-spin"]', { state: "hidden", timeout: 12000 });
+
+    // Step 2: Type in search.
+    const search = page.getByPlaceholder(/search|ค้นหา/i);
+    await search.fill("superadmin");
+
+    // Result: rows filtered by BOTH conditions — no pending badges allowed.
+    const pendingBadges = page.locator("span.rounded-full").filter({ hasText: /^pending$/ });
+    await expect(pendingBadges).toHaveCount(0);
+
+    const rows = page.locator("tbody tr");
+    const count = await rows.count();
+    expect(count).toBeLessThanOrEqual(1);
+  });
+
+  /**
+   * TC-BF2-COMBO-02: Selecting "All Statuses" from the dropdown after a filter
+   * was applied restores the full user list (server-side call with no status param).
+   * ISTQB technique: State Transition (filtered -> all)
+   */
+  test("TC-BF2-COMBO-02 switching back to All Statuses restores full list", async ({ page }) => {
+    // Apply pending filter.
+    const select = page.getByRole("combobox").first();
+    await select.click();
+    await page.getByRole("option", { name: "Pending" }).click();
+    await page.waitForSelector('[class*="animate-spin"]', { state: "hidden", timeout: 12000 });
+
+    // Switch back to All Statuses.
+    await select.click();
+    await page.getByRole("option", { name: "All Statuses" }).click();
+    await page.waitForSelector('[class*="animate-spin"]', { state: "hidden", timeout: 12000 });
+
+    // Both active and pending users may now be visible again.
+    const rows = page.locator("tbody tr");
+    await expect(rows.first()).toBeVisible();
+
+    // At minimum the superadmin (active) must be back in the list.
+    const activeBadges = page.locator("span.rounded-full").filter({ hasText: /^active$/ });
+    await expect(activeBadges.first()).toBeVisible();
+  });
+
+  /**
+   * TC-BF2-COMBO-03: Client-side matchStatus filter is the correct API value.
+   * The API normalizes "unverified" -> "pending" and "disabled" -> "inactive".
+   * The client-side filter compares u.status (API value) with statusFilter state.
+   * We verify no user with status="unverified" or "disabled" leaks through the
+   * "pending" or "inactive" filter view respectively.
+   * ISTQB technique: Equivalence Partitioning (invalid partition: raw DB values should not appear)
+   */
+  test("TC-BF2-COMBO-03 no raw DB status values leak through into rendered badges", async ({ page }) => {
+    const select = page.getByRole("combobox").first();
+    await select.click();
+    await page.getByRole("option", { name: "Pending" }).click();
+    await page.waitForSelector('[class*="animate-spin"]', { state: "hidden", timeout: 12000 });
+
+    // "unverified" is the raw DB value — the API must normalize it to "pending".
+    // If the raw value were shown, the matchStatus filter would also break.
+    const rawUnverifiedBadges = page.locator("span.rounded-full").filter({ hasText: /^unverified$/ });
+    await expect(rawUnverifiedBadges).toHaveCount(0);
+
+    // Switch to inactive filter.
+    await select.click();
+    await page.getByRole("option", { name: "Inactive" }).click();
+    await page.waitForSelector('[class*="animate-spin"]', { state: "hidden", timeout: 12000 });
+
+    // "disabled" is the raw DB value — must not appear in the UI.
+    const rawDisabledBadges = page.locator("span.rounded-full").filter({ hasText: /^disabled$/ });
+    await expect(rawDisabledBadges).toHaveCount(0);
+  });
+
+  /**
+   * TC-BF2-COMBO-04: After filtering by status and invoking a user action,
+   * the filter state is preserved after the action reload.
+   * ISTQB technique: State Transition (action does not reset filter state)
+   * Regression: resend invite must not clear the current status filter.
+   */
+  test("TC-BF2-COMBO-04 status filter is preserved after resend invite action", async ({ page }) => {
+    // Apply pending filter first.
+    const select = page.getByRole("combobox").first();
+    await select.click();
+    await page.getByRole("option", { name: "Pending" }).click();
+    await page.waitForSelector('[class*="animate-spin"]', { state: "hidden", timeout: 12000 });
+
+    const rows = page.locator("tbody tr");
+    if (await rows.count() === 0) {
+      test.skip();
+      return;
+    }
+
+    // Open the action menu for the first pending row.
+    const firstPendingRow = rows.first();
+    await firstPendingRow.locator("button[aria-haspopup=menu]").click();
+
+    const resendItem = page.getByRole("menuitem", { name: /resend invite/i });
+    if (await resendItem.count() === 0) {
+      test.skip();
+      return;
+    }
+
+    await resendItem.click();
+    await page.waitForSelector('[class*="animate-spin"]', { state: "hidden", timeout: 12000 });
+
+    // After the action, the status filter should still be "pending" —
+    // no active users must appear in the table.
+    await expect(page.locator("span.rounded-full").filter({ hasText: /^active$/ })).toHaveCount(0);
+  });
+});

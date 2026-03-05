@@ -252,21 +252,36 @@ func (r *PostgresUserRepo) ListByTenant(ctx context.Context, limit, offset int, 
 	var total int
 
 	err = pgdb.WithTenantSchema(ctx, r.pool, schema, func(conn *pgx.Conn) error {
-		// Count query: if filtering by status, the status value is $1.
+		// Build WHERE clause and bind-parameter list.
+		// Parameters are assigned in the order they appear in args slices so that
+		// $N always refers to args[N-1] — no positional surprises.
+		//
+		// Without status filter:
+		//   count: WHERE deleted_at IS NULL                             (no args)
+		//   list:  WHERE deleted_at IS NULL ... LIMIT $1 OFFSET $2     (limit, offset)
+		//
+		// With status filter:
+		//   count: WHERE deleted_at IS NULL AND status = $1            (status)
+		//   list:  WHERE deleted_at IS NULL AND status = $1 ... LIMIT $2 OFFSET $3
+		//          (status, limit, offset)
 		countWhere := "deleted_at IS NULL"
 		var countArgs []interface{}
+
+		listWhere := "deleted_at IS NULL"
+		var listArgs []interface{}
+
 		if status != "" {
 			countWhere += " AND status = $1"
 			countArgs = append(countArgs, status)
-		}
 
-		// List query: limit=$1, offset=$2; if filtering by status, status is $3.
-		listWhere := "deleted_at IS NULL"
-		listArgs := []interface{}{limit, offset}
-		if status != "" {
-			listWhere += " AND status = $3"
+			listWhere += " AND status = $1"
 			listArgs = append(listArgs, status)
 		}
+
+		// LIMIT and OFFSET always come last in the list args.
+		limitIdx := len(listArgs) + 1
+		offsetIdx := len(listArgs) + 2
+		listArgs = append(listArgs, limit, offset)
 
 		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM users WHERE %s", countWhere)
 		if countErr := conn.QueryRow(ctx, countQuery, countArgs...).Scan(&total); countErr != nil {
@@ -277,8 +292,8 @@ func (r *PostgresUserRepo) ListByTenant(ctx context.Context, limit, offset int, 
 			SELECT id, email, password_hash, status, first_name, last_name,
 			       mfa_enabled, mfa_totp_secret, failed_login_count, locked_until,
 			       email_verified_at, last_login_at, created_at, updated_at, deleted_at
-			FROM users WHERE %s ORDER BY created_at DESC LIMIT $1 OFFSET $2
-		`, listWhere)
+			FROM users WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d
+		`, listWhere, limitIdx, offsetIdx)
 		rows, queryErr := conn.Query(ctx, listQuery, listArgs...)
 		if queryErr != nil {
 			return fmt.Errorf("query users: %w", queryErr)

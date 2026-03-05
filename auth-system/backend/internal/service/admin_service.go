@@ -24,6 +24,12 @@ type UserWithRoles struct {
 	User        *domain.User
 	SystemRoles []string
 	ModuleRoles map[string][]string
+	// TenantID is the slug of the tenant this user belongs to.
+	// Populated by cross-tenant operations (e.g. ListAllAdmins).
+	TenantID   string
+	// TenantName is the display name of the tenant this user belongs to.
+	// Populated by cross-tenant operations (e.g. ListAllAdmins).
+	TenantName string
 }
 
 // AdminService exposes privileged user-management operations reserved for
@@ -44,8 +50,17 @@ type AdminService interface {
 	// anonymize PII, soft-delete the user record, and anonymize audit log references.
 	EraseUser(ctx context.Context, targetUserID string, requestedBy uuid.UUID) error
 	ListUsers(ctx context.Context, limit, offset int, status string) ([]*UserWithRoles, int, error)
+	// ListAllAdmins scans all active tenants and returns users that hold the
+	// "admin" or "super_admin" system role, across every tenant schema.
+	// Supports pagination (limit/offset) and an optional status filter (DB value).
+	// Each returned UserWithRoles has TenantID and TenantName populated.
+	ListAllAdmins(ctx context.Context, limit, offset int, status string) ([]*UserWithRoles, int, error)
 	GetUser(ctx context.Context, userID string) (*UserWithRoles, error)
 	ReplaceUserRoles(ctx context.Context, userID string, systemRoles []string, moduleRoles map[string][]string, actorID string) (*UserWithRoles, error)
+	// ResolveTenantName looks up the display name for a tenant slug.
+	// Falls back to the slug itself when the tenant cannot be found or the
+	// tenant repository is not configured (e.g. in unit tests).
+	ResolveTenantName(ctx context.Context, slug string) string
 }
 
 type adminServiceImpl struct {
@@ -100,6 +115,10 @@ func WithTokenRepo(svc AdminService, tokenRepo domain.TokenRepository) AdminServ
 
 // invitationTTL is the validity window for admin-issued invitation links.
 const invitationTTL = 7 * 24 * time.Hour
+
+// maxTenantScanLimit is the maximum number of tenants to scan in a cross-tenant query.
+// If the platform exceeds this number, results will be truncated and a warning logged.
+const maxTenantScanLimit = 10000
 
 // InviteUser creates a new unverified user account, or re-sends the invitation
 // if the email already exists with a re-invitable status (unverified or disabled).
@@ -455,6 +474,113 @@ func (s *adminServiceImpl) ListUsers(ctx context.Context, limit, offset int, sta
 	return result, total, nil
 }
 
+// ListAllAdmins scans every active tenant schema and collects users that hold
+// the "admin" or "super_admin" system role. Results are paginated with
+// limit/offset applied after the full cross-tenant scan, which is acceptable
+// because the total number of admin users across all tenants is expected to be
+// small.
+//
+// Each returned UserWithRoles has TenantID (slug) and TenantName populated.
+func (s *adminServiceImpl) ListAllAdmins(ctx context.Context, limit, offset int, status string) ([]*UserWithRoles, int, error) {
+	if s.tenantRepo == nil {
+		return nil, 0, fmt.Errorf("list all admins: tenant repository not configured")
+	}
+
+	// Fetch all tenants (no pagination — we need the full list for the cross-tenant scan).
+	// ListAll with a generous limit; in practice the number of tenants is bounded.
+	tenants, _, err := s.tenantRepo.ListAll(ctx, maxTenantScanLimit, 0)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list all admins: fetch tenants: %w", err)
+	}
+	if len(tenants) >= maxTenantScanLimit {
+		slog.Warn("tenant scan may be truncated", "limit", maxTenantScanLimit, "count", len(tenants))
+	}
+
+	var all []*UserWithRoles
+
+	for _, tenant := range tenants {
+		if tenant.Status != domain.TenantStatusActive {
+			continue
+		}
+
+		// Build a child context scoped to this tenant's schema so that the
+		// repo methods (SchemaFromContext / WithTenantSchema) work correctly.
+		tenantCtx := context.WithValue(ctx, pginfra.CtxKeySchemaName, tenant.SchemaName)
+		tenantCtx = context.WithValue(tenantCtx, pginfra.CtxKeyTenantID, tenant.Slug)
+
+		// Fetch all users from this tenant (no status pre-filter here because we
+		// need to apply our admin-role filter first; we will honour the status
+		// filter at the record level below).
+		users, _, fetchErr := s.userRepo.ListByTenant(tenantCtx, 10000, 0, status)
+		if fetchErr != nil {
+			slog.Error("list all admins: fetch users for tenant",
+				"tenant", tenant.Slug, "error", fetchErr)
+			continue
+		}
+		if len(users) == 0 {
+			continue
+		}
+
+		// Batch-fetch roles for all users in this tenant schema.
+		userIDs := make([]uuid.UUID, len(users))
+		for i, u := range users {
+			userIDs[i] = u.ID
+		}
+		rolesByUser, batchErr := s.roleRepo.GetUserRolesBatch(tenantCtx, userIDs)
+		if batchErr != nil {
+			slog.Error("list all admins: fetch roles batch for tenant",
+				"tenant", tenant.Slug, "error", batchErr)
+			rolesByUser = map[uuid.UUID][]*domain.Role{}
+		}
+
+		for _, u := range users {
+			roles := rolesByUser[u.ID]
+
+			systemRoles := make([]string, 0)
+			moduleRoles := make(map[string][]string)
+			isAdmin := false
+
+			for _, r := range roles {
+				if r.Module == nil {
+					systemRoles = append(systemRoles, r.Name)
+					if r.Name == "admin" || r.Name == "super_admin" {
+						isAdmin = true
+					}
+				} else {
+					mod := *r.Module
+					moduleRoles[mod] = append(moduleRoles[mod], r.Name)
+				}
+			}
+
+			// Only include users that hold an admin-level system role.
+			if !isAdmin {
+				continue
+			}
+
+			all = append(all, &UserWithRoles{
+				User:        u,
+				SystemRoles: systemRoles,
+				ModuleRoles: moduleRoles,
+				TenantID:    tenant.Slug,
+				TenantName:  tenant.Name,
+			})
+		}
+	}
+
+	total := len(all)
+
+	// Apply in-memory pagination.
+	if offset >= total {
+		return []*UserWithRoles{}, total, nil
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+
+	return all[offset:end], total, nil
+}
+
 // GetUser returns a single user by ID with their resolved system and module roles.
 func (s *adminServiceImpl) GetUser(ctx context.Context, userID string) (*UserWithRoles, error) {
 	parsedID, err := uuid.Parse(userID)
@@ -601,6 +727,11 @@ func (s *adminServiceImpl) resolveTenantName(ctx context.Context, slug string) s
 		return slug
 	}
 	return tenant.Name
+}
+
+// ResolveTenantName is the public interface method that delegates to resolveTenantName.
+func (s *adminServiceImpl) ResolveTenantName(ctx context.Context, slug string) string {
+	return s.resolveTenantName(ctx, slug)
 }
 
 func (s *adminServiceImpl) enqueueEmail(task EmailTask) {

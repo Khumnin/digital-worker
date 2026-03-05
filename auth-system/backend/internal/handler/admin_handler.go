@@ -193,6 +193,10 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 
 // ListUsers handles GET /api/v1/admin/users.
 // Supports pagination via page and page_size query parameters.
+//
+// Behavior differs by caller role:
+//   - super_admin: returns admin/super_admin accounts from ALL tenants (cross-tenant scan).
+//   - admin: returns all users from the caller's own tenant only (unchanged behavior).
 func (h *AdminHandler) ListUsers(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -223,15 +227,44 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	claimsVal, _ := c.Get("jwt_claims")
 	claims := claimsVal.(middleware.JWTClaims)
 
-	users, total, err := h.adminSvc.ListUsers(c.Request.Context(), pageSize, offset, statusFilter)
+	// Determine whether the caller is a super_admin.
+	isSuperAdmin := false
+	for _, r := range claims.Roles {
+		if r == "super_admin" {
+			isSuperAdmin = true
+			break
+		}
+	}
+
+	var (
+		users []*service.UserWithRoles
+		total int
+		err   error
+	)
+
+	if isSuperAdmin {
+		// Cross-tenant scan: admin and super_admin accounts from all tenants.
+		users, total, err = h.adminSvc.ListAllAdmins(c.Request.Context(), pageSize, offset, statusFilter)
+	} else {
+		// Single-tenant scan: all users from the caller's own tenant.
+		users, total, err = h.adminSvc.ListUsers(c.Request.Context(), pageSize, offset, statusFilter)
+	}
+
 	if err != nil {
 		respondWithServiceError(c, err)
 		return
 	}
 
+	// For the single-tenant path, resolve the caller's tenant display name once
+	// so we do not call the service per-user. For the super_admin cross-tenant
+	// path, each UserWithRoles already has TenantID/TenantName populated by the
+	// service, so this fallback is only used when UserWithRoles.TenantName is
+	// empty (should not happen on the cross-tenant path, but we keep it safe).
+	callerTenantName := h.adminSvc.ResolveTenantName(c.Request.Context(), claims.TenantID)
+
 	items := make([]gin.H, len(users))
 	for i, uwr := range users {
-		items[i] = buildUserResponse(uwr, claims.TenantID)
+		items[i] = buildUserResponse(uwr, claims.TenantID, callerTenantName)
 	}
 
 	totalPages := total / pageSize
@@ -262,7 +295,8 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, buildUserResponse(uwr, claims.TenantID))
+	tenantName := h.adminSvc.ResolveTenantName(c.Request.Context(), claims.TenantID)
+	c.JSON(http.StatusOK, buildUserResponse(uwr, claims.TenantID, tenantName))
 }
 
 type replaceUserRolesRequest struct {
@@ -296,12 +330,17 @@ func (h *AdminHandler) ReplaceUserRoles(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, buildUserResponse(uwr, claims.TenantID))
+	tenantName := h.adminSvc.ResolveTenantName(c.Request.Context(), claims.TenantID)
+	c.JSON(http.StatusOK, buildUserResponse(uwr, claims.TenantID, tenantName))
 }
 
 // buildUserResponse constructs the BE-009 user response shape.
 // Shared by AdminHandler.ListUsers and TenantHandler.ListTenantUsers.
-func buildUserResponse(uwr *service.UserWithRoles, tenantID string) gin.H {
+//
+// tenantID is the caller-supplied fallback slug used when uwr.TenantID is empty
+// (i.e. for single-tenant operations where context already scopes the tenant).
+// tenantName is the display name equivalent of tenantID.
+func buildUserResponse(uwr *service.UserWithRoles, tenantID, tenantName string) gin.H {
 	if uwr == nil || uwr.User == nil {
 		return gin.H{"error": "user data unavailable"}
 	}
@@ -315,6 +354,18 @@ func buildUserResponse(uwr *service.UserWithRoles, tenantID string) gin.H {
 		moduleRoles = map[string][]string{}
 	}
 
+	// Prefer the tenant identity embedded in the UserWithRoles value (set by
+	// cross-tenant queries); fall back to the caller-supplied value for
+	// single-tenant operations.
+	resolvedTenantID := uwr.TenantID
+	if resolvedTenantID == "" {
+		resolvedTenantID = tenantID
+	}
+	resolvedTenantName := uwr.TenantName
+	if resolvedTenantName == "" {
+		resolvedTenantName = tenantName
+	}
+
 	return gin.H{
 		"id":           uwr.User.ID.String(),
 		"email":        uwr.User.Email,
@@ -322,7 +373,8 @@ func buildUserResponse(uwr *service.UserWithRoles, tenantID string) gin.H {
 		"status":       normalizeUserStatus(string(uwr.User.Status)),
 		"system_roles": systemRoles,
 		"module_roles": moduleRoles,
-		"tenant_id":    tenantID,
+		"tenant_id":    resolvedTenantID,
+		"tenant_name":  resolvedTenantName,
 		"created_at":   uwr.User.CreatedAt,
 		"updated_at":   uwr.User.UpdatedAt,
 	}

@@ -14,6 +14,8 @@ interface UserCardProps {
   user: User;
   isAdmin: boolean;
   canSuspend: boolean;
+  /** When true, a "Tenant" row is rendered on the card (Super Admin view only). */
+  showTenant?: boolean;
   statusColor: Record<string, string>;
   onView: (id: string) => void;
   onSuspend?: (id: string) => void;
@@ -28,6 +30,7 @@ export function UserCard({
   user,
   isAdmin,
   canSuspend,
+  showTenant = false,
   statusColor,
   onView,
   onSuspend,
@@ -138,7 +141,19 @@ export function UserCard({
         )}
       </div>
 
-      {/* Row 3: Joined date */}
+      {/* Row 3: Tenant (Super Admin only) */}
+      {showTenant && (
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-medium text-semi-grey uppercase tracking-wide">
+            Tenant
+          </span>
+          <span className="text-xs text-semi-black font-medium truncate">
+            {user.tenant_name || "—"}
+          </span>
+        </div>
+      )}
+
+      {/* Row 4: Joined date */}
       <p className="text-xs text-semi-grey">
         Joined {new Date(user.created_at).toLocaleDateString("th-TH")}
       </p>

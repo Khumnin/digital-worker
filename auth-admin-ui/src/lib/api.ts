@@ -66,6 +66,9 @@ export interface User {
   system_roles: string[];
   module_roles: Record<string, string[]>;
   tenant_id: string;
+  /** Display name of the tenant this user belongs to. Populated only when the
+   *  requesting actor is a super_admin (cross-tenant listing). */
+  tenant_name?: string;
   created_at: string;
   updated_at: string;
 }
