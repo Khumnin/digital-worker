@@ -33,9 +33,7 @@ import { useAuth } from "@/contexts/auth";
 import { tenantApi, type Tenant, type CreateTenantRequest, ApiError } from "@/lib/api";
 
 const MODULE_OPTIONS = [
-  { id: "recruitment", label: "Recruitment" },
-  { id: "payroll", label: "Payroll" },
-  { id: "performance", label: "Performance Management" },
+  { id: "recruit", label: "Recruit" },
 ];
 
 export default function TenantsPage() {
