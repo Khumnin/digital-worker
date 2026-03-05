@@ -723,3 +723,160 @@ func TestListAllAdmins_PaginationApplied(t *testing.T) {
 		t.Errorf("expected 1 result on page 2, got %d", len(page2))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ResolveTenantName tests
+// ---------------------------------------------------------------------------
+
+// TC-10: ResolveTenantName returns the display name when the tenant exists.
+func TestResolveTenantName_KnownSlug_ReturnsTenantDisplayName(t *testing.T) {
+	tenantRepo := newStubTenantRepo()
+	tenantRepo.seed(&domain.Tenant{
+		ID:         uuid.New(),
+		Slug:       "acme",
+		Name:       "ACME Corp",
+		SchemaName: "tenant_acme",
+		Status:     domain.TenantStatusActive,
+	})
+
+	svc := newTestAdminServiceFull(&stubUserRepoWithData{}, &stubRoleRepoWithData{}, tenantRepo)
+
+	got := svc.ResolveTenantName(context.Background(), "acme")
+	if got != "ACME Corp" {
+		t.Errorf("ResolveTenantName(acme): got %q, want %q", got, "ACME Corp")
+	}
+}
+
+// TC-11: ResolveTenantName falls back to the slug when the tenant is not found.
+func TestResolveTenantName_UnknownSlug_ReturnsSlugAsFallback(t *testing.T) {
+	tenantRepo := newStubTenantRepo() // empty — no tenants seeded
+
+	svc := newTestAdminServiceFull(&stubUserRepoWithData{}, &stubRoleRepoWithData{}, tenantRepo)
+
+	got := svc.ResolveTenantName(context.Background(), "unknown-tenant")
+	if got != "unknown-tenant" {
+		t.Errorf("ResolveTenantName(unknown-tenant): got %q, want slug fallback %q", got, "unknown-tenant")
+	}
+}
+
+// TC-12: ResolveTenantName returns an empty string when slug is empty.
+func TestResolveTenantName_EmptySlug_ReturnsEmptyString(t *testing.T) {
+	tenantRepo := newStubTenantRepo()
+	svc := newTestAdminServiceFull(&stubUserRepoWithData{}, &stubRoleRepoWithData{}, tenantRepo)
+
+	got := svc.ResolveTenantName(context.Background(), "")
+	if got != "" {
+		t.Errorf("ResolveTenantName(empty): got %q, want empty string", got)
+	}
+}
+
+// TC-13: ResolveTenantName falls back to the slug when tenantRepo is nil
+// (matches unit test construction where tenantRepo is not configured).
+func TestResolveTenantName_NilTenantRepo_ReturnsSlugAsFallback(t *testing.T) {
+	// newTestAdminService passes nil for tenantRepo — resolveTenantName must
+	// return the slug itself in that case.
+	svc := newTestAdminService(newStubUserRepo(), &stubTokenRepo{})
+
+	got := svc.ResolveTenantName(context.Background(), "some-tenant")
+	if got != "some-tenant" {
+		t.Errorf("ResolveTenantName with nil repo: got %q, want slug fallback %q", got, "some-tenant")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ListAllAdmins with status filter tests
+// ---------------------------------------------------------------------------
+
+// TC-14: ListAllAdmins with status filter returns only admin users matching that status.
+func TestListAllAdmins_WithStatusFilter_ReturnsOnlyMatchingAdmins(t *testing.T) {
+	activeAdminID := uuid.New()
+	disabledAdminID := uuid.New()
+
+	userRepo := &stubUserRepoWithData{
+		users: []*domain.User{
+			{ID: activeAdminID, Email: "active-admin@example.com", Status: domain.UserStatusActive},
+			{ID: disabledAdminID, Email: "disabled-admin@example.com", Status: domain.UserStatusDisabled},
+		},
+	}
+	roleRepo := &stubRoleRepoWithData{
+		rolesByUserID: map[uuid.UUID][]*domain.Role{
+			activeAdminID:  {{ID: uuid.New(), Name: "admin"}},
+			disabledAdminID: {{ID: uuid.New(), Name: "admin"}},
+		},
+	}
+
+	tenantRepo := newStubTenantRepo()
+	tenantRepo.seed(&domain.Tenant{
+		ID:         uuid.New(),
+		Slug:       "corp",
+		Name:       "Corp Ltd",
+		SchemaName: "tenant_corp",
+		Status:     domain.TenantStatusActive,
+	})
+
+	svc := newTestAdminServiceFull(userRepo, roleRepo, tenantRepo)
+
+	// Filter for active only.
+	results, total, err := svc.ListAllAdmins(context.Background(), 100, 0, "active")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("expected total=1 for active filter, got %d", total)
+	}
+	if len(results) != 1 {
+		t.Errorf("expected 1 result for active filter, got %d", len(results))
+	}
+	if results[0].User.ID != activeAdminID {
+		t.Errorf("expected active admin to be returned, got user %s", results[0].User.Email)
+	}
+}
+
+// TC-15: ListAllAdmins returns an error when tenantRepo is nil.
+func TestListAllAdmins_NilTenantRepo_ReturnsError(t *testing.T) {
+	svc := newTestAdminService(newStubUserRepo(), &stubTokenRepo{})
+
+	_, _, err := svc.ListAllAdmins(context.Background(), 100, 0, "")
+	if err == nil {
+		t.Error("expected error when tenantRepo is nil, got nil")
+	}
+}
+
+// TC-16: ListAllAdmins with offset beyond total returns empty slice (not error).
+func TestListAllAdmins_OffsetBeyondTotal_ReturnsEmptySlice(t *testing.T) {
+	adminID := uuid.New()
+
+	userRepo := &stubUserRepoWithData{
+		users: []*domain.User{
+			{ID: adminID, Email: "admin@example.com", Status: domain.UserStatusActive},
+		},
+	}
+	roleRepo := &stubRoleRepoWithData{
+		rolesByUserID: map[uuid.UUID][]*domain.Role{
+			adminID: {{ID: uuid.New(), Name: "admin"}},
+		},
+	}
+
+	tenantRepo := newStubTenantRepo()
+	tenantRepo.seed(&domain.Tenant{
+		ID:         uuid.New(),
+		Slug:       "corp",
+		Name:       "Corp Ltd",
+		SchemaName: "tenant_corp",
+		Status:     domain.TenantStatusActive,
+	})
+
+	svc := newTestAdminServiceFull(userRepo, roleRepo, tenantRepo)
+
+	// offset=100 is beyond the 1 total admin
+	results, total, err := svc.ListAllAdmins(context.Background(), 10, 100, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("expected total=1, got %d", total)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected empty page for offset beyond total, got %d results", len(results))
+	}
+}
