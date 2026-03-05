@@ -89,16 +89,21 @@ export function MobileDrawer({ open, onClose, children }: MobileDrawerProps) {
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Close button — positioned outside the drawer edge for clear affordance */}
+        {children}
+
+        {/*
+         * Close button — positioned at the trailing edge of the drawer panel so it
+         * visually appears just outside the drawer, but remains inside the dialog
+         * element for correct ARIA ownership. Using `translate-x-full` to shift it
+         * beyond the right edge without escaping the dialog boundary in the DOM.
+         */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-[-48px] flex items-center justify-center w-11 h-11 rounded-full bg-black/30 text-white hover:bg-black/50 transition-colors"
+          className="absolute top-4 right-0 translate-x-full flex items-center justify-center w-11 h-11 rounded-full bg-black/30 text-white hover:bg-black/50 transition-colors"
           aria-label="Close navigation menu"
         >
           <X size={18} />
         </button>
-
-        {children}
       </div>
     </>
   );

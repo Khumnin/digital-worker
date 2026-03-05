@@ -103,7 +103,7 @@ export default function MyProfilePage() {
   }
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="space-y-5 w-full max-w-2xl">
       <div>
         <h1 className="text-base font-semibold text-semi-black">My Profile</h1>
         <p className="text-xs text-semi-grey mt-0.5">View and manage your account information</p>
@@ -118,22 +118,26 @@ export default function MyProfilePage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-semi-grey">Email</span>
-            <span className="text-xs text-semi-black font-medium">{profile?.email}</span>
+          {/* Email — wraps on mobile instead of truncating abruptly */}
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5">
+            <span className="text-semi-grey shrink-0">Email</span>
+            <span className="text-xs text-semi-black font-medium break-all">{profile?.email}</span>
           </div>
           <Separator />
-          <div className="flex justify-between">
-            <span className="text-semi-grey">User ID</span>
-            <span className="font-mono text-xs text-semi-black max-w-[260px] truncate">{profile?.user_id}</span>
+          {/* User ID — mono, truncate on mobile */}
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5">
+            <span className="text-semi-grey shrink-0">User ID</span>
+            <span className="font-mono text-xs text-semi-black truncate max-w-full sm:max-w-[260px]">
+              {profile?.user_id}
+            </span>
           </div>
           <Separator />
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
             <span className="text-semi-grey">Tenant</span>
             <span className="font-mono text-xs text-semi-black">{tenantSlug}</span>
           </div>
           <Separator />
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
             <span className="text-semi-grey">Joined</span>
             <span className="text-xs text-semi-black">
               {profile?.created_at ? new Date(profile.created_at).toLocaleDateString("th-TH") : "—"}
@@ -149,14 +153,15 @@ export default function MyProfilePage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSaveName} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            {/* Name grid: single column on mobile, two columns on sm+ */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-semi-grey">First Name</Label>
                 <Input
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="First name"
-                  className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-10 text-sm"
+                  className="w-full bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-11 text-sm"
                 />
               </div>
               <div className="space-y-1.5">
@@ -165,15 +170,16 @@ export default function MyProfilePage() {
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Last name"
-                  className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-10 text-sm"
+                  className="w-full bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-11 text-sm"
                 />
               </div>
             </div>
+            {/* Save button: full width on mobile, auto on sm+ */}
             <div className="flex justify-end">
               <Button
                 type="submit"
                 disabled={savingName}
-                className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-xs h-8 px-4"
+                className="w-full sm:w-auto rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-sm h-11 px-6"
               >
                 {savingName && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
                 Save
@@ -235,12 +241,14 @@ export default function MyProfilePage() {
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   required
                   placeholder="••••••••"
-                  className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-10 text-sm pr-10"
+                  className="w-full bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-11 text-sm pr-14"
                 />
+                {/* Touch target >= 44px */}
                 <button
                   type="button"
                   onClick={() => setShowCurrent((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-semi-grey hover:text-semi-black"
+                  aria-label={showCurrent ? "Hide password" : "Show password"}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-11 h-11 text-semi-grey hover:text-semi-black rounded-[10px]"
                   tabIndex={-1}
                 >
                   {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -256,12 +264,14 @@ export default function MyProfilePage() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
                   placeholder="Min. 8 characters"
-                  className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-10 text-sm pr-10"
+                  className="w-full bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-11 text-sm pr-14"
                 />
+                {/* Touch target >= 44px */}
                 <button
                   type="button"
                   onClick={() => setShowNew((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-semi-grey hover:text-semi-black"
+                  aria-label={showNew ? "Hide password" : "Show password"}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-11 h-11 text-semi-grey hover:text-semi-black rounded-[10px]"
                   tabIndex={-1}
                 >
                   {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -276,14 +286,15 @@ export default function MyProfilePage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 placeholder="Re-enter new password"
-                className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-10 text-sm"
+                className="w-full bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-11 text-sm"
               />
             </div>
+            {/* Change password button: full width on mobile, auto on sm+ */}
             <div className="flex justify-end">
               <Button
                 type="submit"
                 disabled={savingPassword}
-                className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-xs h-8 px-4"
+                className="w-full sm:w-auto rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-sm h-11 px-6"
               >
                 {savingPassword && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
                 Change Password

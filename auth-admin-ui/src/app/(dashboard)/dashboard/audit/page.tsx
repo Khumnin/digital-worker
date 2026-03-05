@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/contexts/auth";
 import { auditApi, type AuditLog, ApiError } from "@/lib/api";
+import { AuditLogCard } from "./_components/audit-log-card";
 
 const PAGE_SIZE = 25;
 
@@ -103,16 +104,16 @@ export default function AuditPage() {
 
   return (
     <div className="space-y-4">
-      {/* Filter bar */}
-      <form onSubmit={handleApply} className="flex items-end gap-3 flex-wrap">
-        {/* Action dropdown */}
+      {/* Filter bar — stacks vertically on mobile, inline on desktop */}
+      <form onSubmit={handleApply} className="flex flex-col sm:flex-row sm:items-end gap-3">
+        {/* Action dropdown — full width on mobile */}
         <div className="space-y-1">
           <Label className="text-xs text-semi-grey font-medium">Action</Label>
           <Select
             value={actionFilter}
             onValueChange={(val) => setActionFilter(val)}
           >
-            <SelectTrigger className="h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm min-w-[190px]">
+            <SelectTrigger className="w-full sm:w-[190px] h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm">
               <SelectValue placeholder="All Actions" />
             </SelectTrigger>
             <SelectContent>
@@ -125,15 +126,15 @@ export default function AuditPage() {
           </Select>
         </div>
 
-        {/* Date range filters */}
-        <div className="flex items-end gap-2">
+        {/* Date range filters — stack vertically on mobile, side-by-side on sm+ */}
+        <div className="flex flex-col sm:flex-row sm:items-end gap-2">
           <div className="space-y-1">
             <Label className="text-xs text-semi-grey font-medium">From</Label>
             <Input
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm w-[148px]"
+              className="w-full sm:w-[148px] h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm"
             />
           </div>
           <div className="space-y-1">
@@ -142,7 +143,7 @@ export default function AuditPage() {
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              className="h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm w-[148px]"
+              className="w-full sm:w-[148px] h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm"
             />
           </div>
         </div>
@@ -150,14 +151,14 @@ export default function AuditPage() {
         <Button
           type="submit"
           variant="outline"
-          className="rounded-[1000px] h-10 text-sm"
+          className="w-full sm:w-auto rounded-[1000px] h-10 text-sm"
         >
           Apply
         </Button>
       </form>
 
-      {/* Table */}
-      <div className="bg-card rounded-[10px] border border-border overflow-hidden">
+      {/* Desktop table */}
+      <div className="hidden md:block bg-card rounded-[10px] border border-border overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="animate-spin text-tiger-red" size={24} />
@@ -232,6 +233,30 @@ export default function AuditPage() {
               })}
             </TableBody>
           </Table>
+        )}
+      </div>
+
+      {/* Mobile card list */}
+      <div className="block md:hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="animate-spin text-tiger-red" size={24} />
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-semi-grey">
+            <ScrollText size={36} className="mb-3 opacity-40" />
+            <p className="text-sm">No audit events found</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {logs.map((log) => (
+              <AuditLogCard
+                key={log.id}
+                log={log}
+                actionColors={actionColors}
+              />
+            ))}
+          </div>
         )}
       </div>
 

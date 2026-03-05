@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/auth";
 import { roleApi, type Role, type CreateRoleRequest, ApiError } from "@/lib/api";
+import { RoleCard } from "./_components/role-card";
 
 export default function RolesPage() {
   const { getToken } = useAuth();
@@ -145,8 +146,8 @@ export default function RolesPage() {
         ))}
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-between">
+      {/* Toolbar — responsive: count on left, button on right; full-width button on mobile */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <p className="text-sm text-semi-grey">
           {filteredRoles.length} role{filteredRoles.length !== 1 ? "s" : ""}
           {selectedModule !== "all" ? ` in "${tabLabel(selectedModule)}"` : " in this tenant"}
@@ -155,7 +156,7 @@ export default function RolesPage() {
         {selectedModule !== "system" && (
           <Button
             onClick={openCreateDialog}
-            className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-sm h-10 px-4"
+            className="w-full sm:w-auto rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-sm h-11 px-4"
           >
             <Plus size={16} className="mr-1.5" />
             {isModuleTab ? "Create Custom Role" : "Create Role"}
@@ -163,8 +164,8 @@ export default function RolesPage() {
         )}
       </div>
 
-      {/* Table */}
-      <div className="bg-card rounded-[10px] border border-border overflow-hidden">
+      {/* Desktop table */}
+      <div className="hidden md:block bg-card rounded-[10px] border border-border overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="animate-spin text-tiger-red" size={24} />
@@ -244,9 +245,33 @@ export default function RolesPage() {
         )}
       </div>
 
-      {/* Create Role Dialog */}
+      {/* Mobile card list */}
+      <div className="block md:hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="animate-spin text-tiger-red" size={24} />
+          </div>
+        ) : filteredRoles.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-semi-grey">
+            <ShieldCheck size={36} className="mb-3 opacity-40" />
+            <p className="text-sm">No roles found</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredRoles.map((role) => (
+              <RoleCard
+                key={role.id}
+                role={role}
+                onDelete={!role.is_system ? handleDelete : undefined}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Create Role Dialog — responsive */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="sm:max-w-[400px] rounded-[10px]">
+        <DialogContent className="w-[calc(100vw-32px)] sm:max-w-[400px] rounded-[10px]">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold text-semi-black">
               {isModuleTab ? `Create Custom Role — ${tabLabel(selectedModule)}` : "Create Custom Role"}
@@ -266,7 +291,7 @@ export default function RolesPage() {
                     name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"),
                   }))
                 }
-                className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11 font-mono"
+                className="w-full rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11 font-mono"
               />
               <p className="text-xs text-semi-grey">lowercase letters, numbers, underscore</p>
             </div>
@@ -276,7 +301,7 @@ export default function RolesPage() {
                 placeholder="HR recruiter with access to job postings"
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11"
+                className="w-full rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11"
               />
             </div>
             <div className="space-y-1.5">
@@ -285,23 +310,23 @@ export default function RolesPage() {
                 placeholder="recruit (leave blank for system scope)"
                 value={form.module}
                 onChange={(e) => setForm((f) => ({ ...f, module: e.target.value.toLowerCase() }))}
-                className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11"
+                className="w-full rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11"
               />
               <p className="text-xs text-semi-grey">Leave blank for tenant-wide custom role</p>
             </div>
-            <DialogFooter className="pt-2">
+            <DialogFooter className="flex-col-reverse sm:flex-row pt-2 gap-2">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => setShowCreate(false)}
-                className="rounded-[1000px]"
+                className="w-full sm:w-auto rounded-[1000px] h-11"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={creating}
-                className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white"
+                className="w-full sm:w-auto rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white h-11"
               >
                 {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create

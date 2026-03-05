@@ -58,9 +58,11 @@ function CopyField({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-semi-grey font-medium uppercase">{label}</p>
       <div className="flex items-center gap-2 bg-[#f0f0f0] dark:bg-input rounded-[10px] px-3 py-2">
         <code className="text-xs text-semi-black flex-1 break-all font-mono">{value}</code>
+        {/* 44px touch target for the copy button (WCAG 2.5.5) */}
         <button
           onClick={copy}
-          className="shrink-0 text-semi-grey hover:text-semi-black transition-colors"
+          aria-label={`Copy ${label}`}
+          className="shrink-0 w-11 h-11 flex items-center justify-center text-semi-grey hover:text-semi-black transition-colors -mr-2"
         >
           {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
         </button>
@@ -194,31 +196,39 @@ AUTH_PLATFORM_TENANT_SLUG=platform`;
 
   return (
     <div className="space-y-5 max-w-4xl">
-      {/* Back + Header */}
-      <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.back()}
-          className="h-8 w-8 rounded-full"
-        >
-          <ArrowLeft size={16} />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-base font-semibold text-semi-black">{tenant.name}</h1>
-          <p className="text-xs text-semi-grey font-mono">{tenant.slug}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
-            statusColor[tenant.status] ?? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700"
-          }`}>
+      {/* Back + Header — stacks on mobile */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        {/* Row 1 (mobile): back button + tenant name/slug */}
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.back()}
+            className="h-8 w-8 rounded-full shrink-0"
+          >
+            <ArrowLeft size={16} />
+          </Button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base font-semibold text-semi-black truncate">{tenant.name}</h1>
+            <p className="text-xs text-semi-grey font-mono truncate">{tenant.slug}</p>
+          </div>
+          {/* Status badge — always next to name on all screen sizes */}
+          <span
+            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border shrink-0 ${
+              statusColor[tenant.status] ?? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700"
+            }`}
+          >
             {tenant.status}
           </span>
+        </div>
+
+        {/* Row 2 (mobile): action buttons — full-width on mobile, inline on sm+ */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={handleToggleStatus}
-            className="rounded-[1000px] text-xs h-8"
+            className="w-full sm:w-auto rounded-[1000px] text-xs h-10 sm:h-8"
           >
             <RefreshCw size={12} className="mr-1.5" />
             {tenant.status === "active" ? "Suspend" : "Activate"}
@@ -282,7 +292,7 @@ AUTH_PLATFORM_TENANT_SLUG=platform`;
                   await navigator.clipboard.writeText(integrationEnv);
                   toast.success("Copied to clipboard");
                 }}
-                className="text-xs text-tiger-red hover:underline font-medium"
+                className="text-xs text-tiger-red hover:underline font-medium min-h-[44px] inline-flex items-center"
               >
                 Copy all env vars
               </button>
@@ -296,7 +306,7 @@ AUTH_PLATFORM_TENANT_SLUG=platform`;
       {/* Administrators Section */}
       <Card className="rounded-[10px] border-border shadow-none">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-sm font-semibold text-semi-black flex items-center gap-2">
               <Users size={15} className="text-tiger-red" />
               Administrators
@@ -304,7 +314,7 @@ AUTH_PLATFORM_TENANT_SLUG=platform`;
             <Button
               size="sm"
               onClick={() => setShowInvite(true)}
-              className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-xs h-8 px-3"
+              className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-xs h-9 sm:h-8 px-3 shrink-0"
             >
               <Plus size={13} className="mr-1" />
               Invite Admin
@@ -343,8 +353,8 @@ AUTH_PLATFORM_TENANT_SLUG=platform`;
                     <p className="text-xs text-semi-grey truncate">{user.email}</p>
                   </div>
 
-                  {/* Roles */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  {/* Roles — hide on smallest screens to avoid overflow */}
+                  <div className="hidden sm:flex items-center gap-2 shrink-0">
                     {(user.system_roles ?? []).map((r) => (
                       <Badge
                         key={r}
@@ -363,10 +373,24 @@ AUTH_PLATFORM_TENANT_SLUG=platform`;
                     </span>
                   </div>
 
-                  {/* Actions */}
+                  {/* Status badge only on mobile */}
+                  <span
+                    className={`sm:hidden inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border shrink-0 ${
+                      statusColor[user.status] ?? "bg-gray-100 text-gray-500 border-gray-200"
+                    }`}
+                  >
+                    {user.status}
+                  </span>
+
+                  {/* Actions — 44px touch target */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-11 w-11 sm:h-7 sm:w-7 rounded-full shrink-0"
+                        aria-label="User actions"
+                      >
                         <MoreHorizontal size={14} />
                       </Button>
                     </DropdownMenuTrigger>

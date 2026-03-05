@@ -79,7 +79,7 @@ export default function SettingsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-semi-black">
                 Require MFA
@@ -88,17 +88,25 @@ export default function SettingsPage() {
                 Force all users to enable TOTP before accessing the system
               </p>
             </div>
+            {/* Touch target wrapper: 44px (WCAG 2.5.5) */}
             <button
               onClick={() => setMfaRequired((v) => !v)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                mfaRequired ? "bg-tiger-red" : "bg-[#e5e5e5] dark:bg-[#3A3A45]"
-              }`}
+              aria-checked={mfaRequired}
+              role="switch"
+              aria-label="Require MFA"
+              className="shrink-0 flex items-center justify-center min-w-[44px] min-h-[44px]"
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                  mfaRequired ? "translate-x-6" : "translate-x-1"
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  mfaRequired ? "bg-tiger-red" : "bg-[#e5e5e5] dark:bg-[#3A3A45]"
                 }`}
-              />
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    mfaRequired ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </span>
             </button>
           </div>
 
@@ -114,7 +122,7 @@ export default function SettingsPage() {
               max="168"
               value={sessionHours}
               onChange={(e) => setSessionHours(e.target.value)}
-              className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11 max-w-[160px]"
+              className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11 w-full sm:max-w-[160px]"
             />
             <p className="text-xs text-semi-grey">
               How long refresh tokens remain valid. Default: 1 hour.
@@ -171,7 +179,7 @@ export default function SettingsPage() {
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white h-10 px-6"
+          className="w-full sm:w-auto rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white h-11 px-6"
         >
           {saving ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

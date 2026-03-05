@@ -115,7 +115,7 @@ export default function DashboardPage() {
                 <a
                   key={action.label}
                   href={action.href}
-                  className="flex items-center justify-center px-4 py-3 rounded-[10px] bg-[#f0f0f0] dark:bg-[#2A2A35] text-sm font-medium text-semi-black hover:bg-[#e8e8e8] dark:hover:bg-[#333344] transition-colors text-center"
+                  className="flex items-center justify-center min-h-[44px] px-4 py-3 rounded-[10px] bg-[#f0f0f0] dark:bg-[#2A2A35] text-sm font-medium text-semi-black hover:bg-[#e8e8e8] dark:hover:bg-[#333344] transition-colors text-center"
                 >
                   {action.label}
                 </a>

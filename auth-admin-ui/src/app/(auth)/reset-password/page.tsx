@@ -72,8 +72,8 @@ function ResetPasswordForm() {
   // No token in URL — invalid/expired link
   if (!token) {
     return (
-      <div className="min-h-screen bg-page-bg flex items-center justify-center px-4">
-        <div className="w-full max-w-[440px] bg-card rounded-[10px] p-10 shadow-sm text-center">
+      <div className="min-h-screen bg-page-bg flex items-center justify-center px-4 py-8">
+        <div className="w-[calc(100vw-32px)] sm:w-full sm:max-w-[440px] bg-card rounded-[10px] p-6 sm:p-10 shadow-sm text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-red-50 dark:bg-red-900/30 mb-5">
             <svg
               width="28"
@@ -96,7 +96,7 @@ function ResetPasswordForm() {
           </p>
           <Button
             onClick={() => router.push("/forgot-password")}
-            className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white h-11 px-8 text-sm font-semibold"
+            className="w-full sm:w-auto rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white h-12 px-8 text-sm font-semibold"
           >
             Request New Link
           </Button>
@@ -108,8 +108,8 @@ function ResetPasswordForm() {
   // Done state — password updated successfully
   if (done) {
     return (
-      <div className="min-h-screen bg-page-bg flex items-center justify-center px-4">
-        <div className="w-full max-w-[440px] bg-card rounded-[10px] p-10 shadow-sm text-center">
+      <div className="min-h-screen bg-page-bg flex items-center justify-center px-4 py-8">
+        <div className="w-[calc(100vw-32px)] sm:w-full sm:max-w-[440px] bg-card rounded-[10px] p-6 sm:p-10 shadow-sm text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-50 dark:bg-green-900/30 mb-5">
             <CheckCircle2 size={28} className="text-green-500" />
           </div>
@@ -122,7 +122,7 @@ function ResetPasswordForm() {
           </p>
           <Button
             onClick={() => router.push("/login")}
-            className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white h-11 px-8 text-sm font-semibold"
+            className="w-full sm:w-auto rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white h-12 px-8 text-sm font-semibold"
           >
             Go to Sign In
           </Button>
@@ -133,8 +133,8 @@ function ResetPasswordForm() {
 
   // Form state
   return (
-    <div className="min-h-screen bg-page-bg flex items-center justify-center px-4">
-      <div className="w-full max-w-[440px] bg-card rounded-[10px] p-10 shadow-sm">
+    <div className="min-h-screen bg-page-bg flex items-center justify-center px-4 py-8">
+      <div className="w-[calc(100vw-32px)] sm:w-full sm:max-w-[440px] bg-card rounded-[10px] p-6 sm:p-10 shadow-sm">
         {/* Brand */}
         <div className="mb-8 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-tiger-red mb-4">
@@ -165,12 +165,14 @@ function ResetPasswordForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 pr-12 text-sm focus-visible:ring-tiger-red"
+                className="w-full bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 pr-14 text-sm focus-visible:ring-tiger-red"
               />
+              {/* Touch target >= 44px */}
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-semi-grey hover:text-semi-black transition-colors"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-11 h-11 text-semi-grey hover:text-semi-black transition-colors rounded-[10px]"
                 tabIndex={-1}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -189,7 +191,7 @@ function ResetPasswordForm() {
               required
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
+              className="w-full bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
             />
           </div>
 

@@ -46,9 +46,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-page-bg flex items-center justify-center px-4">
-      {/* Card */}
-      <div className="w-full max-w-[440px] bg-card rounded-[10px] p-10 shadow-sm">
+    <div className="min-h-screen bg-page-bg flex items-center justify-center px-4 py-8">
+      {/* Card — constrained width with safe horizontal margin on 375px screens */}
+      <div className="w-[calc(100vw-32px)] sm:w-full sm:max-w-[440px] bg-card rounded-[10px] p-6 sm:p-10 shadow-sm">
         {/* Logo / Brand */}
         <div className="mb-8 text-center">
           <Image
@@ -82,7 +82,7 @@ export default function LoginPage() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, tenantSlug: e.target.value }))
               }
-              className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
+              className="w-full bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
             />
           </div>
 
@@ -101,7 +101,7 @@ export default function LoginPage() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, email: e.target.value }))
               }
-              className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
+              className="w-full bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
             />
           </div>
 
@@ -121,12 +121,14 @@ export default function LoginPage() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, password: e.target.value }))
                 }
-                className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 pr-12 text-sm focus-visible:ring-tiger-red"
+                className="w-full bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 pr-14 text-sm focus-visible:ring-tiger-red"
               />
+              {/* Touch target >= 44px */}
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-semi-grey hover:text-semi-black transition-colors"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-11 h-11 text-semi-grey hover:text-semi-black transition-colors rounded-[10px]"
                 tabIndex={-1}
               >
                 {showPassword ? (
@@ -138,14 +140,17 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Forgot password */}
+          {/* Forgot password — touch target >= 44px via inline-flex + min-h */}
           <div className="text-right">
-            <Link href="/forgot-password" className="text-xs text-tiger-red hover:underline">
+            <Link
+              href="/forgot-password"
+              className="inline-flex items-center min-h-[44px] text-xs text-tiger-red hover:underline"
+            >
               Forgot password?
             </Link>
           </div>
 
-          {/* Submit */}
+          {/* Submit — full width, 48px height */}
           <Button
             type="submit"
             disabled={loading}
