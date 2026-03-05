@@ -237,7 +237,7 @@ export function InviteUserDialog({
   if (sentEmail) {
     return (
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-[440px] rounded-[10px]">
+        <DialogContent className="w-[calc(100vw-32px)] sm:max-w-[440px] rounded-[10px] max-h-[90vh] overflow-y-auto">
           <div className="flex flex-col items-center text-center py-4 space-y-4">
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-green-50 dark:bg-green-900/20">
               <CheckCircle2 size={28} className="text-green-500" />
@@ -287,7 +287,7 @@ export function InviteUserDialog({
   // ── Main form view ──────────────────────────────────────────────────────
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[440px] rounded-[10px]">
+      <DialogContent className="w-[calc(100vw-32px)] sm:max-w-[440px] rounded-[10px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base font-semibold text-semi-black">
             Invite User

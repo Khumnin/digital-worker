@@ -174,37 +174,43 @@ export default function UserDetailPage() {
 
   return (
     <div className="space-y-5 max-w-3xl">
-      {/* Back + Header */}
-      <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.back()}
-          className="h-8 w-8 rounded-full"
-        >
-          <ArrowLeft size={16} />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-base font-semibold text-semi-black">
-            {user.display_name}
-          </h1>
-          <p className="text-xs text-semi-grey">{user.email}</p>
-        </div>
-        <div className="flex items-center gap-2">
+      {/* Back + Header — stacks on mobile */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        {/* Back button + name row */}
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.back()}
+            className="h-8 w-8 rounded-full shrink-0"
+          >
+            <ArrowLeft size={16} />
+          </Button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base font-semibold text-semi-black truncate">
+              {user.display_name}
+            </h1>
+            <p className="text-xs text-semi-grey truncate">{user.email}</p>
+          </div>
+          {/* Status badge — always visible next to name */}
           <span
-            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
+            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border shrink-0 ${
               statusColor[user.status] ?? ""
             }`}
           >
             {user.status}
           </span>
+        </div>
+
+        {/* Action buttons — full-width stacked on mobile, inline on sm+ */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
           {isAdmin && user.status === "pending" && (
             <Button
               variant="outline"
               size="sm"
               onClick={handleResendInvite}
               disabled={resending}
-              className="rounded-[1000px] text-xs h-8 text-tiger-red border-tiger-red/30 hover:bg-tiger-red/5"
+              className="w-full sm:w-auto rounded-[1000px] text-xs h-10 sm:h-8 text-tiger-red border-tiger-red/30 hover:bg-tiger-red/5"
             >
               {resending ? (
                 <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
@@ -219,7 +225,7 @@ export default function UserDetailPage() {
               onClick={handleSendPasswordReset}
               disabled={sendingReset}
               variant="outline"
-              className="rounded-[1000px] text-xs h-8 text-semi-black border-border"
+              className="w-full sm:w-auto rounded-[1000px] text-xs h-10 sm:h-8 text-semi-black border-border"
             >
               {sendingReset ? (
                 <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
@@ -237,7 +243,7 @@ export default function UserDetailPage() {
               variant="outline"
               size="sm"
               onClick={handleSuspend}
-              className="rounded-[1000px] text-xs h-8 text-destructive border-destructive/30 hover:bg-destructive/5"
+              className="w-full sm:w-auto rounded-[1000px] text-xs h-10 sm:h-8 text-destructive border-destructive/30 hover:bg-destructive/5"
             >
               Suspend
             </Button>
@@ -253,16 +259,16 @@ export default function UserDetailPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-semi-grey">User ID</span>
-            <span className="font-mono text-xs text-semi-black max-w-[260px] truncate">
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+            <span className="text-semi-grey shrink-0">User ID</span>
+            <span className="font-mono text-xs text-semi-black max-w-full sm:max-w-[260px] truncate">
               {user.id}
             </span>
           </div>
           <Separator />
-          <div className="flex justify-between">
-            <span className="text-semi-grey">Tenant</span>
-            <span className="font-mono text-xs text-semi-black">
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+            <span className="text-semi-grey shrink-0">Tenant</span>
+            <span className="font-mono text-xs text-semi-black truncate">
               {user.tenant_id}
             </span>
           </div>
@@ -289,7 +295,7 @@ export default function UserDetailPage() {
 
       {/* Roles Section */}
       <Card className="rounded-[10px] border-border shadow-none">
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold text-semi-black flex items-center gap-2">
             <Shield size={15} className="text-tiger-red" />
             Roles
@@ -299,7 +305,7 @@ export default function UserDetailPage() {
               size="sm"
               onClick={handleSaveRoles}
               disabled={savingRoles}
-              className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-xs h-8 px-3"
+              className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-xs h-9 sm:h-8 px-3 shrink-0"
             >
               {savingRoles && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
               Save Roles

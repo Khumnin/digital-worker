@@ -31,6 +31,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/auth";
 import { tenantApi, type Tenant, type CreateTenantRequest, ApiError } from "@/lib/api";
+import { TenantCard } from "./_components/tenant-card";
 
 const MODULE_OPTIONS = [
   { id: "recruit", label: "Recruit" },
@@ -144,9 +145,10 @@ export default function TenantsPage() {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
+      {/* Responsive Toolbar */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        {/* Search — full width on mobile */}
+        <div className="relative w-full sm:flex-1 sm:max-w-sm">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-semi-grey" />
           <Input
             placeholder="ค้นหา tenant..."
@@ -155,17 +157,18 @@ export default function TenantsPage() {
             className="pl-9 h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm"
           />
         </div>
+        {/* Provision button — full width on mobile */}
         <Button
           onClick={() => setShowCreate(true)}
-          className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-sm h-10 px-4"
+          className="w-full sm:w-auto rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-sm h-10 px-4"
         >
           <Plus size={16} className="mr-1.5" />
           Provision Tenant
         </Button>
       </div>
 
-      {/* Table */}
-      <div className="bg-card rounded-[10px] border border-border overflow-hidden">
+      {/* Desktop table — hidden on mobile */}
+      <div className="hidden md:block bg-card rounded-[10px] border border-border overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="animate-spin text-tiger-red" size={24} />
@@ -260,9 +263,36 @@ export default function TenantsPage() {
         )}
       </div>
 
-      {/* Create Tenant Dialog */}
+      {/* Mobile card stack — visible only below md breakpoint */}
+      <div className="block md:hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="animate-spin text-tiger-red" size={24} />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-semi-grey">
+            <Building2 size={36} className="mb-3 opacity-40" />
+            <p className="text-sm">No tenants found</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((tenant) => (
+              <TenantCard
+                key={tenant.id}
+                tenant={tenant}
+                statusColor={statusColor}
+                onView={(id) => router.push(`/dashboard/tenants/${id}`)}
+                onSuspend={handleSuspend}
+                onActivate={handleActivate}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Create Tenant Dialog — responsive width */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="sm:max-w-[500px] rounded-[10px]">
+        <DialogContent className="w-[calc(100vw-32px)] sm:max-w-[500px] rounded-[10px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold text-semi-black">
               Provision New Tenant

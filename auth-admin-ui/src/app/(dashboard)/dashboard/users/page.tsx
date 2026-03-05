@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/auth";
 import { InviteUserDialog } from "@/components/invite-user-dialog";
+import { UserCard } from "./_components/user-card";
 import {
   userApi,
   type User,
@@ -197,10 +198,10 @@ export default function UsersPage() {
         </button>
       )}
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
+      {/* Responsive Toolbar */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+        {/* Search — full width on mobile */}
+        <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-sm">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-semi-grey" />
           <Input
             placeholder="ค้นหาผู้ใช้..."
@@ -210,38 +211,41 @@ export default function UsersPage() {
           />
         </div>
 
-        {/* Status filter */}
-        <div className="flex items-center gap-1.5">
-          <Label className="text-xs text-semi-grey font-medium whitespace-nowrap">Status</Label>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm min-w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Filters — 2-col grid on mobile, inline on sm+ */}
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3">
+          {/* Status filter */}
+          <div className="flex items-center gap-1.5">
+            <Label className="text-xs text-semi-grey font-medium whitespace-nowrap hidden sm:block">Status</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm w-full sm:min-w-[140px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* Module filter */}
-        <div className="flex items-center gap-1.5">
-          <Label className="text-xs text-semi-grey font-medium whitespace-nowrap">Module</Label>
-          <Select value={moduleFilter} onValueChange={setModuleFilter}>
-            <SelectTrigger className="h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm min-w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MODULE_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Module filter */}
+          <div className="flex items-center gap-1.5">
+            <Label className="text-xs text-semi-grey font-medium whitespace-nowrap hidden sm:block">Module</Label>
+            <Select value={moduleFilter} onValueChange={setModuleFilter}>
+              <SelectTrigger className="h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm w-full sm:min-w-[140px]">
+                <SelectValue placeholder="Module" />
+              </SelectTrigger>
+              <SelectContent>
+                {MODULE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Clear filters */}
@@ -250,17 +254,18 @@ export default function UsersPage() {
             variant="ghost"
             size="sm"
             onClick={clearFilters}
-            className="h-10 rounded-[1000px] text-xs text-semi-grey hover:text-semi-black gap-1"
+            className="h-10 rounded-[1000px] text-xs text-semi-grey hover:text-semi-black gap-1 w-full sm:w-auto"
           >
             <X size={13} />
             Clear filters
           </Button>
         )}
 
+        {/* Invite User button — full width on mobile */}
         {isAdmin && (
           <Button
             onClick={() => setShowInvite(true)}
-            className="rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-sm h-10 px-4 ml-auto"
+            className="w-full sm:w-auto sm:ml-auto rounded-[1000px] bg-tiger-red hover:bg-tiger-red/90 text-white text-sm h-10 px-4"
           >
             <Plus size={16} className="mr-1.5" />
             Invite User
@@ -268,8 +273,8 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* Table */}
-      <div className="bg-card rounded-[10px] border border-border overflow-hidden">
+      {/* Desktop table — hidden on mobile */}
+      <div className="hidden md:block bg-card rounded-[10px] border border-border overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="animate-spin text-tiger-red" size={24} />
@@ -382,6 +387,35 @@ export default function UsersPage() {
               ))}
             </TableBody>
           </Table>
+        )}
+      </div>
+
+      {/* Mobile card stack — visible only below md breakpoint */}
+      <div className="block md:hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="animate-spin text-tiger-red" size={24} />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-semi-grey">
+            <UsersIcon size={36} className="mb-3 opacity-40" />
+            <p className="text-sm">No users found</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((user) => (
+              <UserCard
+                key={user.id}
+                user={user}
+                isAdmin={isAdmin}
+                canSuspend={canSuspend(user)}
+                statusColor={statusColor}
+                onView={(id) => router.push(`/dashboard/users/${id}`)}
+                onSuspend={handleSuspend}
+                onResendInvite={handleResendInvite}
+              />
+            ))}
+          </div>
         )}
       </div>
 

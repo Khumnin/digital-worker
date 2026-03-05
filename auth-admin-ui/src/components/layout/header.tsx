@@ -11,16 +11,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { ChevronDown, Globe } from "lucide-react";
+import { ChevronDown, Globe, Menu } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface HeaderProps {
   lang: "th" | "en";
   onLangChange: (lang: "th" | "en") => void;
   title?: string;
+  /** Called when the hamburger button is tapped on mobile to open the nav drawer. */
+  onMenuOpen?: () => void;
 }
 
-export function Header({ lang, onLangChange, title }: HeaderProps) {
+export function Header({ lang, onLangChange, title, onMenuOpen }: HeaderProps) {
   const { user, isSuperAdmin, logout } = useAuth();
   const router = useRouter();
 
@@ -35,11 +37,23 @@ export function Header({ lang, onLangChange, title }: HeaderProps) {
       : "?";
 
   return (
-    <header className="h-[64px] bg-card border-b border-border flex items-center justify-between px-6 shrink-0">
-      {/* Page title */}
-      <h2 className="text-[15px] font-semibold text-semi-black">
-        {title ?? "Dashboard"}
-      </h2>
+    <header className="h-[64px] bg-card border-b border-border flex items-center justify-between px-4 md:px-6 shrink-0">
+      <div className="flex items-center gap-2">
+        {/* Hamburger button — mobile only */}
+        {onMenuOpen && (
+          <button
+            onClick={onMenuOpen}
+            className="md:hidden flex items-center justify-center w-11 h-11 rounded-[10px] text-semi-black hover:bg-[#f5f5f5] dark:hover:bg-[#2A2A35] transition-colors"
+            aria-label="Open navigation menu"
+          >
+            <Menu size={20} />
+          </button>
+        )}
+        {/* Page title */}
+        <h2 className="text-[15px] font-semibold text-semi-black">
+          {title ?? "Dashboard"}
+        </h2>
+      </div>
 
       <div className="flex items-center gap-3">
         {/* Theme toggle */}

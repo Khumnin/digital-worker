@@ -46,6 +46,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Responsive touch target minimum (44px) */
+  --size-touch-target: 44px;
+
   /* shadcn/ui standard tokens */
   --color-background: var(--background);
   --color-foreground: var(--foreground);

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { MobileDrawer } from "@/components/layout/mobile-drawer";
 import { useAuth } from "@/contexts/auth";
 import { Loader2 } from "lucide-react";
 
@@ -19,6 +20,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [lang, setLang] = useState<"th" | "en">("th");
   const [ready, setReady] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Restore lang preference
   useEffect(() => {
@@ -71,10 +73,29 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-page-bg">
-      <Sidebar lang={lang} />
+      {/* Desktop/tablet sidebar — hidden on mobile */}
+      <div className="hidden md:flex">
+        <Sidebar lang={lang} />
+      </div>
+
+      {/* Mobile drawer — only rendered on mobile, invisible on md+ via md:hidden */}
+      <MobileDrawer
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      >
+        <Sidebar
+          lang={lang}
+          onNavigate={() => setMobileMenuOpen(false)}
+        />
+      </MobileDrawer>
+
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header lang={lang} onLangChange={handleLangChange} />
-        <main className="flex-1 overflow-y-auto p-6">
+        <Header
+          lang={lang}
+          onLangChange={handleLangChange}
+          onMenuOpen={() => setMobileMenuOpen(true)}
+        />
+        <main className="flex-1 overflow-y-auto p-4 md:p-5 lg:p-6">
           {children}
         </main>
       </div>

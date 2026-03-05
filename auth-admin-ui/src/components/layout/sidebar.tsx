@@ -84,13 +84,19 @@ const NAV_ITEMS: NavItem[] = [
 
 interface SidebarProps {
   lang: "th" | "en";
+  /** Called when a nav link or logout is clicked; used in mobile drawer to auto-close. */
+  onNavigate?: () => void;
 }
 
-export function Sidebar({ lang }: SidebarProps) {
+export function Sidebar({ lang, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { isSuperAdmin, isAdmin, logout } = useAuth();
   const [expanded, setExpanded] = useState(true);
+
+  // When rendered inside the MobileDrawer, always show fully expanded (labels visible).
+  const isMobileDrawer = !!onNavigate;
+  const effectiveExpanded = isMobileDrawer ? true : expanded;
 
   useEffect(() => {
     const stored = localStorage.getItem(SIDEBAR_KEY);
@@ -119,14 +125,14 @@ export function Sidebar({ lang }: SidebarProps) {
     <aside
       className={cn(
         "flex flex-col h-screen bg-sidebar border-r border-sidebar-border transition-[width] duration-200 ease-in-out shrink-0",
-        expanded ? "w-[298px]" : "w-[60px]"
+        isMobileDrawer ? "w-[280px]" : effectiveExpanded ? "w-[298px]" : "w-[60px]"
       )}
     >
       {/* Brand */}
       <div
         className={cn(
           "flex items-center h-[64px] px-4 border-b border-sidebar-border shrink-0",
-          !expanded && "justify-center"
+          !effectiveExpanded && "justify-center"
         )}
       >
         {/* TigerSoft Logo Mark */}
@@ -137,7 +143,7 @@ export function Sidebar({ lang }: SidebarProps) {
           height={32}
           className="shrink-0"
         />
-        {expanded && (
+        {effectiveExpanded && (
           <span className="ml-3 text-sm font-semibold text-semi-black truncate">
             TGX Auth Console
           </span>
@@ -157,12 +163,13 @@ export function Sidebar({ lang }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => onNavigate?.()}
               className={cn(
                 "flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-[#FFF0F2] dark:bg-[#2A1A1E] text-tiger-red"
                   : "text-semi-black hover:bg-[#f5f5f5] dark:hover:bg-[#2A2A35]",
-                !expanded && "justify-center px-0"
+                !effectiveExpanded && "justify-center px-0"
               )}
             >
               <item.icon
@@ -172,11 +179,11 @@ export function Sidebar({ lang }: SidebarProps) {
                   isActive ? "text-tiger-red" : "text-semi-grey"
                 )}
               />
-              {expanded && <span className="truncate">{label}</span>}
+              {effectiveExpanded && <span className="truncate">{label}</span>}
             </Link>
           );
 
-          if (!expanded) {
+          if (!effectiveExpanded) {
             return (
               <Tooltip key={item.href} delayDuration={0}>
                 <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
@@ -192,7 +199,7 @@ export function Sidebar({ lang }: SidebarProps) {
 
       {/* Logout */}
       <div className="px-2 pb-3 space-y-1 border-t border-sidebar-border pt-3">
-        {expanded ? (
+        {effectiveExpanded ? (
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 w-full rounded-[10px] px-3 py-2.5 text-sm font-medium text-semi-black hover:bg-[#f5f5f5] dark:hover:bg-[#2A2A35] transition-colors"
@@ -216,23 +223,25 @@ export function Sidebar({ lang }: SidebarProps) {
           </Tooltip>
         )}
 
-        {/* Toggle button */}
-        <button
-          onClick={toggleExpanded}
-          className={cn(
-            "flex items-center w-full rounded-[10px] px-3 py-2 text-xs text-semi-grey hover:bg-[#f5f5f5] dark:hover:bg-[#2A2A35] transition-colors",
-            !expanded && "justify-center px-0"
-          )}
-        >
-          {expanded ? (
-            <>
-              <ChevronLeft size={16} className="mr-2" />
-              <span>{lang === "th" ? "ย่อเมนู" : "Collapse"}</span>
-            </>
-          ) : (
-            <ChevronRight size={16} />
-          )}
-        </button>
+        {/* Toggle button — hidden in mobile drawer (always expanded there) */}
+        {!isMobileDrawer && (
+          <button
+            onClick={toggleExpanded}
+            className={cn(
+              "flex items-center w-full rounded-[10px] px-3 py-2 text-xs text-semi-grey hover:bg-[#f5f5f5] dark:hover:bg-[#2A2A35] transition-colors",
+              !effectiveExpanded && "justify-center px-0"
+            )}
+          >
+            {effectiveExpanded ? (
+              <>
+                <ChevronLeft size={16} className="mr-2" />
+                <span>{lang === "th" ? "ย่อเมนู" : "Collapse"}</span>
+              </>
+            ) : (
+              <ChevronRight size={16} />
+            )}
+          </button>
+        )}
       </div>
     </aside>
   );
