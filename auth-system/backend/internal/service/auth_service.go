@@ -105,6 +105,7 @@ type LoginResult struct {
 type LogoutInput struct {
 	RefreshToken string
 	IPAddress    string
+	UserAgent    string
 }
 
 type LogoutAllInput struct {
@@ -168,6 +169,9 @@ func (s *authServiceImpl) Register(ctx context.Context, input RegisterInput) (*R
 		ActorIP:      input.IPAddress,
 		ActorUA:      input.UserAgent,
 		TargetUserID: &user.ID,
+		Metadata: map[string]interface{}{
+			"email": user.Email,
+		},
 	})
 
 	slog.Info("user registered", "user_id", user.ID, "tenant_id", tenant.ID)
@@ -197,7 +201,10 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 			EventType: domain.EventLoginFailure,
 			ActorIP:   input.IPAddress,
 			ActorUA:   input.UserAgent,
-			Metadata:  map[string]interface{}{"reason": "user_not_found"},
+			Metadata: map[string]interface{}{
+				"reason":          "user_not_found",
+				"email_attempted": input.Email,
+			},
 		})
 		return nil, domain.ErrInvalidCredentials
 	}
@@ -209,7 +216,10 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 			ActorIP:      input.IPAddress,
 			ActorUA:      input.UserAgent,
 			TargetUserID: &user.ID,
-			Metadata:     map[string]interface{}{"reason": "account_locked"},
+			Metadata: map[string]interface{}{
+				"reason":          "account_locked",
+				"email_attempted": input.Email,
+			},
 		})
 		return nil, domain.ErrAccountLocked
 	}
@@ -250,7 +260,11 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 				ActorIP:      input.IPAddress,
 				ActorUA:      input.UserAgent,
 				TargetUserID: &user.ID,
-				Metadata:     map[string]interface{}{"locked_until": lockUntil},
+				Metadata: map[string]interface{}{
+					"locked_until": lockUntil,
+					"email":        user.Email,
+					"failed_count": newCount,
+				},
 			})
 		}
 
@@ -260,7 +274,11 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 			ActorIP:      input.IPAddress,
 			ActorUA:      input.UserAgent,
 			TargetUserID: &user.ID,
-			Metadata:     map[string]interface{}{"failed_count": newCount},
+			Metadata: map[string]interface{}{
+				"reason":          "invalid_password",
+				"failed_count":    newCount,
+				"email_attempted": input.Email,
+			},
 		})
 
 		return nil, domain.ErrInvalidCredentials
@@ -289,7 +307,10 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 				ActorIP:      input.IPAddress,
 				ActorUA:      input.UserAgent,
 				TargetUserID: &user.ID,
-				Metadata:     map[string]interface{}{"reason": "invalid_totp"},
+				Metadata: map[string]interface{}{
+					"reason":          "invalid_totp",
+					"email_attempted": input.Email,
+				},
 			})
 			return nil, domain.ErrInvalidTOTPCode
 		}
@@ -306,13 +327,15 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 		sessionTTL = time.Duration(tenant.Config.SessionTTLSeconds) * time.Second
 	}
 
-	roleNames := s.resolveUserRoles(ctx, user.ID)
+	systemRoleNames, moduleRolesMap := s.resolveUserRoles(ctx, user.ID)
 
 	accessToken, err := s.jwtSvc.Sign(jwtutil.Claims{
-		Subject:  user.ID.String(),
-		TenantID: tenant.ID.String(),
-		Roles:    roleNames,
-		TTL:      s.cfg.AccessTokenTTL,
+		Subject:     user.ID.String(),
+		Email:       user.Email,
+		TenantID:    tenant.Slug,
+		Roles:       systemRoleNames,
+		ModuleRoles: moduleRolesMap,
+		TTL:         s.cfg.AccessTokenTTL,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("sign access token: %w", err)
@@ -341,12 +364,22 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 		return nil, fmt.Errorf("create session: %w", err)
 	}
 
+	method := "password"
+	if input.TOTPCode != "" {
+		method = "totp_verified"
+	}
+
 	s.writeAuditEvent(ctx, domain.AuditEvent{
 		EventType:    domain.EventLoginSuccess,
 		ActorID:      &user.ID,
 		ActorIP:      input.IPAddress,
 		ActorUA:      input.UserAgent,
 		TargetUserID: &user.ID,
+		Metadata: map[string]interface{}{
+			"email":    user.Email,
+			"method":   method,
+			"mfa_used": user.MFAEnabled,
+		},
 	})
 
 	return &LoginResult{
@@ -361,14 +394,24 @@ func (s *authServiceImpl) Login(ctx context.Context, input LoginInput) (*LoginRe
 func (s *authServiceImpl) Logout(ctx context.Context, input LogoutInput) error {
 	_, tokenHash := crypto.HashToken(input.RefreshToken)
 
+	// Fetch session before revoking to capture the actor identity for the audit trail.
+	session, _ := s.sessionRepo.FindByTokenHash(ctx, tokenHash)
+
 	if err := s.sessionRepo.RevokeByTokenHash(ctx, tokenHash); err != nil {
 		slog.Warn("logout: session not found (idempotent)", "error", err)
 	}
 
-	s.writeAuditEvent(ctx, domain.AuditEvent{
+	event := domain.AuditEvent{
 		EventType: domain.EventLogout,
 		ActorIP:   input.IPAddress,
-	})
+		ActorUA:   input.UserAgent,
+	}
+	if session != nil {
+		event.ActorID = &session.UserID
+		event.TargetUserID = &session.UserID
+	}
+
+	s.writeAuditEvent(ctx, event)
 
 	return nil
 }
@@ -420,41 +463,22 @@ func (s *authServiceImpl) writeAuditEvent(ctx context.Context, event domain.Audi
 	}
 }
 
-// resolveUserRoles fetches the user's assigned roles from the tenant schema and
-// returns their names as a string slice for inclusion in JWT claims (US-10).
-// Falls back to []string{"user"} on error so login is never blocked by an RBAC read failure.
-// Logs a warning if a user has more than 20 roles (JWT size concern per US-10 DoD).
-func (s *authServiceImpl) resolveUserRoles(ctx context.Context, userID uuid.UUID) []string {
-	roles, err := s.roleRepo.GetUserRoles(ctx, userID)
-	if err != nil {
-		slog.Warn("failed to fetch user roles for JWT; falling back to [user]",
-			"user_id", userID, "error", err)
-		return []string{"user"}
-	}
-	names := make([]string, 0, len(roles)+1)
-	names = append(names, "user") // baseline role always present
-	for _, r := range roles {
-		if r.Name != "user" {
-			names = append(names, r.Name)
-		}
-	}
-	if len(names) > 20 {
-		slog.Warn("user has more than 20 roles — JWT payload may be large",
-			"user_id", userID, "role_count", len(names))
-	}
-	return names
+// resolveUserRoles calls the shared resolveRoles helper on the auth service's roleRepo.
+func (s *authServiceImpl) resolveUserRoles(ctx context.Context, userID uuid.UUID) ([]string, map[string][]string) {
+	return resolveRoles(ctx, s.roleRepo, userID)
 }
 
 func timePtr(t time.Time) *time.Time { return &t }
 
 // EmailTask is a task submitted to the async email worker.
 type EmailTask struct {
-	Type      EmailType
-	ToEmail   string
-	ToName    string
-	Token     string
-	ExpiresAt time.Time
-	Extra     map[string]interface{}
+	Type       EmailType
+	ToEmail    string
+	ToName     string
+	Token      string
+	ExpiresAt  time.Time
+	TenantSlug string // used to build tenant-scoped accept-invite / verify URLs
+	Extra      map[string]interface{}
 }
 
 type EmailType string

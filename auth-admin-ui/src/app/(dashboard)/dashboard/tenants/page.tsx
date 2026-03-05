@@ -49,6 +49,7 @@ export default function TenantsPage() {
   const [form, setForm] = useState<CreateTenantRequest>({
     name: "",
     slug: "",
+    admin_email: "",
     config: { enabled_modules: [] },
   });
 
@@ -83,7 +84,7 @@ export default function TenantsPage() {
       await tenantApi.create(form, token);
       toast.success(`Tenant "${form.name}" provisioned`);
       setShowCreate(false);
-      setForm({ name: "", slug: "", config: { enabled_modules: [] } });
+      setForm({ name: "", slug: "", admin_email: "", config: { enabled_modules: [] } });
       await load();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to provision tenant");
@@ -138,9 +139,9 @@ export default function TenantsPage() {
   );
 
   const statusColor: Record<string, string> = {
-    active: "bg-green-100 text-green-700 border-green-200",
-    suspended: "bg-red-100 text-tiger-red border-red-200",
-    pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
+    active: "bg-[#EDFBF5] dark:bg-green-900/30 text-[#34D186] border-[#34D186]/40",
+    suspended: "bg-red-100 dark:bg-red-900/30 text-tiger-red dark:text-red-400 border-red-200 dark:border-red-800",
+    pending: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800",
   };
 
   return (
@@ -153,7 +154,7 @@ export default function TenantsPage() {
             placeholder="ค้นหา tenant..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-10 rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] text-sm"
+            className="pl-9 h-10 rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input text-sm"
           />
         </div>
         <Button
@@ -166,7 +167,7 @@ export default function TenantsPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-[10px] border border-border overflow-hidden">
+      <div className="bg-card rounded-[10px] border border-border overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="animate-spin text-tiger-red" size={24} />
@@ -179,7 +180,7 @@ export default function TenantsPage() {
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#fafafa] hover:bg-[#fafafa]">
+              <TableRow className="bg-[#fafafa] dark:bg-[#1a2332] hover:bg-[#fafafa] dark:hover:bg-[#1a2332]">
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">Name</TableHead>
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">Slug</TableHead>
                 <TableHead className="text-xs font-semibold text-semi-grey uppercase">Status</TableHead>
@@ -192,7 +193,7 @@ export default function TenantsPage() {
               {filtered.map((tenant) => (
                 <TableRow
                   key={tenant.id}
-                  className="cursor-pointer hover:bg-[#fafafa]"
+                  className="cursor-pointer bg-white dark:bg-[#1E2533] hover:bg-[#fafafa] dark:hover:bg-[#1a2332]"
                   onClick={() => router.push(`/dashboard/tenants/${tenant.id}`)}
                 >
                   <TableCell className="font-medium text-semi-black text-sm">
@@ -212,7 +213,7 @@ export default function TenantsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {(tenant.config?.enabled_modules ?? []).map((mod) => (
+                      {(tenant.enabled_modules ?? []).map((mod) => (
                         <Badge
                           key={mod}
                           variant="outline"
@@ -279,7 +280,7 @@ export default function TenantsPage() {
                 placeholder="Acme Corporation"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11"
+                className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11"
               />
             </div>
             <div className="space-y-1.5">
@@ -295,7 +296,21 @@ export default function TenantsPage() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") }))
                 }
-                className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11 font-mono"
+                className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11 font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-semi-black">
+                Admin Email
+                <span className="text-semi-grey font-normal ml-1">(initial admin user)</span>
+              </Label>
+              <Input
+                required
+                type="email"
+                placeholder="admin@acme.co.th"
+                value={form.admin_email}
+                onChange={(e) => setForm((f) => ({ ...f, admin_email: e.target.value }))}
+                className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11"
               />
             </div>
 
@@ -310,7 +325,7 @@ export default function TenantsPage() {
                   return (
                     <label
                       key={mod.id}
-                      className="flex items-center gap-3 cursor-pointer rounded-[10px] border border-border p-3 hover:bg-[#fafafa] transition-colors"
+                      className="flex items-center gap-3 cursor-pointer rounded-[10px] border border-border p-3 hover:bg-[#fafafa] dark:hover:bg-[#1a2332] transition-colors"
                     >
                       <input
                         type="checkbox"

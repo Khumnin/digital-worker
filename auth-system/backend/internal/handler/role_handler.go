@@ -20,8 +20,9 @@ func NewRoleHandler(svc service.RBACService) *RoleHandler {
 }
 
 type createRoleRequest struct {
-	Name        string `json:"name"        validate:"required,min=1,max=100"`
-	Description string `json:"description" validate:"omitempty,max=500"`
+	Name        string  `json:"name"        validate:"required,min=1,max=100"`
+	Description string  `json:"description" validate:"omitempty,max=500"`
+	Module      *string `json:"module"      validate:"omitempty,min=1,max=100"`
 }
 
 type assignRoleRequest struct {
@@ -35,16 +36,17 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 		return
 	}
 
-	role, err := h.rbacSvc.CreateRole(c.Request.Context(), req.Name, req.Description)
+	role, err := h.rbacSvc.CreateRole(c.Request.Context(), req.Name, req.Description, req.Module)
 	if err != nil {
 		respondWithServiceError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"role_id":     role.ID.String(),
+		"id":          role.ID.String(),
 		"name":        role.Name,
 		"description": role.Description,
+		"module":      role.Module,
 		"is_system":   role.IsSystem,
 		"created_at":  role.CreatedAt,
 	})
@@ -61,14 +63,30 @@ func (h *RoleHandler) ListRoles(c *gin.Context) {
 	items := make([]gin.H, len(roles))
 	for i, r := range roles {
 		items[i] = gin.H{
-			"role_id":     r.ID.String(),
+			"id":          r.ID.String(),
 			"name":        r.Name,
 			"description": r.Description,
+			"module":      r.Module,
 			"is_system":   r.IsSystem,
+			"created_at":  r.CreatedAt,
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": items})
+	c.JSON(http.StatusOK, items)
+}
+
+// DeleteRole handles DELETE /api/v1/admin/roles/:id.
+// Returns 403 if the role is a system role, 409 if it is currently assigned to
+// any user, and 204 No Content on success.
+func (h *RoleHandler) DeleteRole(c *gin.Context) {
+	roleID := c.Param("id")
+
+	if err := h.rbacSvc.DeleteRole(c.Request.Context(), roleID); err != nil {
+		respondWithServiceError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 // AssignRole handles POST /api/v1/admin/users/:id/roles.
@@ -98,7 +116,10 @@ func (h *RoleHandler) UnassignRole(c *gin.Context) {
 	userID := c.Param("id")
 	roleID := c.Param("roleId")
 
-	if err := h.rbacSvc.UnassignRole(c.Request.Context(), userID, roleID); err != nil {
+	claimsVal, _ := c.Get("jwt_claims")
+	claims := claimsVal.(middleware.JWTClaims)
+
+	if err := h.rbacSvc.UnassignRole(c.Request.Context(), userID, roleID, claims.UserID); err != nil {
 		respondWithServiceError(c, err)
 		return
 	}

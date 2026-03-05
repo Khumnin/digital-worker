@@ -9,34 +9,29 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/auth";
-import { tenantApi, type TenantConfig, ApiError } from "@/lib/api";
+import { settingsApi, ApiError } from "@/lib/api";
 
 export default function SettingsPage() {
-  const { getToken, tenantId } = useAuth();
-  const [config, setConfig] = useState<TenantConfig>({});
+  const { getToken } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [tenantDbId, setTenantDbId] = useState<string | null>(null);
-  const [sessionMinutes, setSessionMinutes] = useState("60");
+  const [sessionHours, setSessionHours] = useState("1");
   const [mfaRequired, setMfaRequired] = useState(false);
+  const [allowedDomains, setAllowedDomains] = useState("");
 
   useEffect(() => {
     load();
-  }, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     setLoading(true);
     try {
       const token = await getToken();
-      if (!token || !tenantId) return;
-      const tenants = await tenantApi.list(token);
-      const current = tenants.data.find((t) => t.id === tenantId || t.slug === tenantId);
-      if (current) {
-        setTenantDbId(current.id);
-        setConfig(current.config ?? {});
-        setMfaRequired(current.config?.mfa_required ?? false);
-        setSessionMinutes(String(current.config?.session_duration_minutes ?? 60));
-      }
+      if (!token) return;
+      const settings = await settingsApi.get(token);
+      setMfaRequired(settings.mfa_required);
+      setSessionHours(String(settings.session_duration_hours));
+      setAllowedDomains((settings.allowed_domains ?? []).join(", "));
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to load settings");
     } finally {
@@ -45,19 +40,20 @@ export default function SettingsPage() {
   }
 
   async function handleSave() {
-    if (!tenantDbId) return;
     setSaving(true);
     try {
       const token = await getToken();
       if (!token) return;
-      const updatedConfig: TenantConfig = {
-        ...config,
+      const domains = allowedDomains
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean);
+      await settingsApi.update(token, {
         mfa_required: mfaRequired,
-        session_duration_minutes: parseInt(sessionMinutes, 10) || 60,
-      };
-      await tenantApi.update(tenantDbId, { config: updatedConfig }, token);
+        session_duration_hours: parseInt(sessionHours, 10) || 1,
+        allowed_domains: domains,
+      });
       toast.success("Settings saved");
-      setConfig(updatedConfig);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to save settings");
     } finally {
@@ -95,7 +91,7 @@ export default function SettingsPage() {
             <button
               onClick={() => setMfaRequired((v) => !v)}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                mfaRequired ? "bg-tiger-red" : "bg-[#e5e5e5]"
+                mfaRequired ? "bg-tiger-red" : "bg-[#e5e5e5] dark:bg-[#3A3A45]"
               }`}
             >
               <span
@@ -110,18 +106,36 @@ export default function SettingsPage() {
 
           <div className="space-y-1.5">
             <Label className="text-sm font-medium text-semi-black">
-              Session Duration (minutes)
+              Session Duration (hours)
             </Label>
             <Input
               type="number"
-              min="15"
-              max="1440"
-              value={sessionMinutes}
-              onChange={(e) => setSessionMinutes(e.target.value)}
-              className="rounded-[10px] bg-[#f0f0f0] border-[#f0f0f0] h-11 max-w-[160px]"
+              min="1"
+              max="168"
+              value={sessionHours}
+              onChange={(e) => setSessionHours(e.target.value)}
+              className="rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input h-11 max-w-[160px]"
             />
             <p className="text-xs text-semi-grey">
-              How long refresh tokens remain valid. Default: 60 minutes.
+              How long refresh tokens remain valid. Default: 1 hour.
+            </p>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-semi-black">
+              Allowed Domains
+            </Label>
+            <textarea
+              value={allowedDomains}
+              onChange={(e) => setAllowedDomains(e.target.value)}
+              placeholder="company.co.th, partner.com"
+              rows={3}
+              className="w-full rounded-[10px] bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input border px-3 py-2 text-sm text-semi-black placeholder:text-semi-grey resize-none focus:outline-none focus:ring-2 focus:ring-tiger-red/30"
+            />
+            <p className="text-xs text-semi-grey">
+              Comma-separated list of email domains allowed to sign up. Leave empty to allow all domains.
             </p>
           </div>
         </CardContent>
@@ -144,7 +158,7 @@ export default function SettingsPage() {
               <p className="text-semi-grey text-[10px] uppercase font-semibold not-italic">
                 {item.label}
               </p>
-              <div className="bg-[#f0f0f0] rounded-[10px] px-3 py-2 text-semi-black break-all">
+              <div className="bg-[#f0f0f0] dark:bg-input rounded-[10px] px-3 py-2 text-semi-black break-all">
                 {item.value}
               </div>
             </div>

@@ -3,12 +3,14 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 	"tigersoft/auth-system/internal/domain"
+	pginfra "tigersoft/auth-system/internal/infrastructure/postgres"
 	"tigersoft/auth-system/pkg/crypto"
 )
 
@@ -17,11 +19,23 @@ import (
 // preserving the audit trail shape while severing the link to the deleted identity.
 var gdprTombstoneUUID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
 
+// UserWithRoles bundles a user record with their resolved system and module roles.
+type UserWithRoles struct {
+	User        *domain.User
+	SystemRoles []string
+	ModuleRoles map[string][]string
+}
+
 // AdminService exposes privileged user-management operations reserved for
 // tenant administrators.
 type AdminService interface {
-	InviteUser(ctx context.Context, email, firstName, lastName string) (*domain.User, error)
-	DisableUser(ctx context.Context, userID string) error
+	InviteUser(ctx context.Context, email, firstName, lastName, initialRole, actorID string) (*domain.User, error)
+	// ResendInvite re-sends the invitation email for an unverified user.
+	// Only works when the user status is unverified; returns ErrUserNotFound
+	// or a descriptive error for any other state.
+	ResendInvite(ctx context.Context, userID string) error
+	DisableUser(ctx context.Context, userID, actorID string) error
+	EnableUser(ctx context.Context, userID, actorID string) error
 	// DeleteUser is kept for backward compatibility. It now delegates to EraseUser,
 	// performing a full GDPR erasure rather than a simple soft delete.
 	DeleteUser(ctx context.Context, userID string) error
@@ -30,6 +44,8 @@ type AdminService interface {
 	// anonymize PII, soft-delete the user record, and anonymize audit log references.
 	EraseUser(ctx context.Context, targetUserID string, requestedBy uuid.UUID) error
 	ListUsers(ctx context.Context, limit, offset int) ([]*domain.User, int, error)
+	GetUser(ctx context.Context, userID string) (*UserWithRoles, error)
+	ReplaceUserRoles(ctx context.Context, userID string, systemRoles []string, moduleRoles map[string][]string, actorID string) (*UserWithRoles, error)
 }
 
 type adminServiceImpl struct {
@@ -82,23 +98,83 @@ func WithTokenRepo(svc AdminService, tokenRepo domain.TokenRepository) AdminServ
 // invitationTTL is the validity window for admin-issued invitation links.
 const invitationTTL = 7 * 24 * time.Hour
 
-// InviteUser creates an unverified user account, generates a verification
-// token, and sends an invitation email.
-func (s *adminServiceImpl) InviteUser(ctx context.Context, email, firstName, lastName string) (*domain.User, error) {
+// InviteUser creates a new unverified user account, or re-sends the invitation
+// if the email already exists with a re-invitable status (unverified or disabled).
+//
+//   - New email          → create user, send invite.
+//   - Unverified email   → re-send invite (previous token still valid; new one supersedes it).
+//   - Disabled email     → re-enable account (→ unverified) and re-send invite.
+//   - Active / deleted   → return ErrEmailAlreadyExists.
+func (s *adminServiceImpl) InviteUser(ctx context.Context, email, firstName, lastName, initialRole, actorID string) (*domain.User, error) {
 	normalized, err := domain.NormalizeEmail(email)
 	if err != nil {
 		return nil, domain.ErrInvalidEmail
 	}
 
-	user, err := s.userRepo.Create(ctx, domain.CreateUserInput{
-		Email:        normalized,
-		PasswordHash: "",
-		FirstName:    firstName,
-		LastName:     lastName,
-		Status:       domain.UserStatusUnverified,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create invited user: %w", err)
+	// Check whether an account with this email already exists.
+	existing, lookupErr := s.userRepo.FindByEmail(ctx, normalized)
+	if lookupErr != nil && !errors.Is(lookupErr, domain.ErrUserNotFound) {
+		return nil, fmt.Errorf("lookup email for invite: %w", lookupErr)
+	}
+
+	var user *domain.User
+
+	if existing != nil {
+		switch existing.Status {
+		case domain.UserStatusUnverified:
+			// Account created but invitation never accepted — just resend.
+			user = existing
+
+		case domain.UserStatusDisabled:
+			// Admin-suspended account; re-inviting re-enables it.
+			unverified := domain.UserStatusUnverified
+			updated, updateErr := s.userRepo.Update(ctx, existing.ID, domain.UpdateUserInput{
+				Status: &unverified,
+			})
+			if updateErr != nil {
+				return nil, fmt.Errorf("re-enable user for re-invite: %w", updateErr)
+			}
+			user = updated
+
+		default:
+			// Active, deleted, or any other status — cannot overwrite.
+			return nil, domain.ErrEmailAlreadyExists
+		}
+	} else {
+		// Brand-new email — create the account.
+		created, createErr := s.userRepo.Create(ctx, domain.CreateUserInput{
+			Email:        normalized,
+			PasswordHash: "",
+			FirstName:    firstName,
+			LastName:     lastName,
+			Status:       domain.UserStatusUnverified,
+		})
+		if createErr != nil {
+			return nil, fmt.Errorf("create invited user: %w", createErr)
+		}
+		user = created
+	}
+
+	// Assign initial role if provided; defaults to "user".
+	// Only "user" and "admin" are permitted — "super_admin" is never granted via invite.
+	roleName := initialRole
+	if roleName == "" {
+		roleName = "user"
+	}
+	if roleName != "user" && roleName != "admin" {
+		roleName = "user"
+	}
+	role, roleErr := s.roleRepo.FindByName(ctx, roleName)
+	if roleErr == nil && role != nil {
+		// Replace all current roles with this single initial role.
+		// Failure is non-fatal — the invite proceeds regardless.
+		if assignErr := s.roleRepo.ReplaceUserRoles(ctx, user.ID, []uuid.UUID{role.ID}); assignErr != nil {
+			slog.Error("invite: failed to assign initial role",
+				"user_id", user.ID, "role", roleName, "error", assignErr)
+		}
+	} else if roleErr != nil {
+		slog.Error("invite: initial role not found, skipping assignment",
+			"role", roleName, "error", roleErr)
 	}
 
 	rawToken, tokenHash, err := crypto.GenerateTokenWithHash()
@@ -114,16 +190,27 @@ func (s *adminServiceImpl) InviteUser(ctx context.Context, email, firstName, las
 		}
 	}
 
+	tenantSlug, _ := ctx.Value(pginfra.CtxKeyTenantID).(string)
+
 	s.enqueueEmail(EmailTask{
-		Type:      EmailTypeInvitation,
-		ToEmail:   user.Email,
-		ToName:    user.FullName(),
-		Token:     rawToken,
-		ExpiresAt: expiresAt,
+		Type:       EmailTypeInvitation,
+		ToEmail:    user.Email,
+		ToName:     user.FullName(),
+		Token:      rawToken,
+		ExpiresAt:  expiresAt,
+		TenantSlug: tenantSlug,
 	})
+
+	var actorPtr *uuid.UUID
+	if actorID != "" {
+		if parsed, parseErr := uuid.Parse(actorID); parseErr == nil {
+			actorPtr = &parsed
+		}
+	}
 
 	s.writeAuditEvent(ctx, domain.AuditEvent{
 		EventType:    domain.EventUserInvited,
+		ActorID:      actorPtr,
 		TargetUserID: &user.ID,
 		Metadata: map[string]interface{}{
 			"email": user.Email,
@@ -133,11 +220,72 @@ func (s *adminServiceImpl) InviteUser(ctx context.Context, email, firstName, las
 	return user, nil
 }
 
-// DisableUser sets a user's status to Disabled and revokes all active sessions.
-func (s *adminServiceImpl) DisableUser(ctx context.Context, userID string) error {
+// ResendInvite generates a fresh invitation token for an unverified user and
+// re-sends the invitation email. Returns an error if the user does not exist
+// or is not in an invitable state (unverified).
+func (s *adminServiceImpl) ResendInvite(ctx context.Context, userID string) error {
 	parsedID, err := uuid.Parse(userID)
 	if err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	user, err := s.userRepo.FindByID(ctx, parsedID)
+	if err != nil {
+		return fmt.Errorf("find user for resend invite: %w", err)
+	}
+
+	if user.Status != domain.UserStatusUnverified {
+		return fmt.Errorf("user is not in a pending state (current status: %s)", user.Status)
+	}
+
+	rawToken, tokenHash, err := crypto.GenerateTokenWithHash()
+	if err != nil {
+		return fmt.Errorf("generate invitation token: %w", err)
+	}
+
+	expiresAt := time.Now().Add(invitationTTL)
+
+	if s.tokenRepo != nil {
+		if storeErr := s.tokenRepo.CreateEmailVerificationToken(ctx, user.ID, tokenHash, expiresAt); storeErr != nil {
+			return fmt.Errorf("store invitation token: %w", storeErr)
+		}
+	}
+
+	tenantSlug, _ := ctx.Value(pginfra.CtxKeyTenantID).(string)
+
+	s.enqueueEmail(EmailTask{
+		Type:       EmailTypeInvitation,
+		ToEmail:    user.Email,
+		ToName:     user.FullName(),
+		Token:      rawToken,
+		ExpiresAt:  expiresAt,
+		TenantSlug: tenantSlug,
+	})
+
+	s.writeAuditEvent(ctx, domain.AuditEvent{
+		EventType:    domain.EventUserInvited,
+		TargetUserID: &user.ID,
+		Metadata: map[string]interface{}{
+			"email":   user.Email,
+			"resent":  true,
+		},
+	})
+
+	return nil
+}
+
+// DisableUser sets a user's status to Disabled and revokes all active sessions.
+func (s *adminServiceImpl) DisableUser(ctx context.Context, userID, actorID string) error {
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	var actorPtr *uuid.UUID
+	if actorID != "" {
+		if parsed, parseErr := uuid.Parse(actorID); parseErr == nil {
+			actorPtr = &parsed
+		}
 	}
 
 	disabled := domain.UserStatusDisabled
@@ -153,10 +301,16 @@ func (s *adminServiceImpl) DisableUser(ctx context.Context, userID string) error
 			"user_id", parsedID, "error", err)
 	}
 
+	meta := map[string]interface{}{}
+	if user, fetchErr := s.userRepo.FindByID(ctx, parsedID); fetchErr == nil {
+		meta["target_email"] = user.Email
+	}
+
 	s.writeAuditEvent(ctx, domain.AuditEvent{
 		EventType:    domain.EventUserDisabled,
-		ActorID:      &parsedID,
+		ActorID:      actorPtr,
 		TargetUserID: &parsedID,
+		Metadata:     meta,
 	})
 
 	return nil
@@ -247,6 +401,139 @@ func (s *adminServiceImpl) ListUsers(ctx context.Context, limit, offset int) ([]
 	}
 
 	return users, total, nil
+}
+
+// GetUser returns a single user by ID with their resolved system and module roles.
+func (s *adminServiceImpl) GetUser(ctx context.Context, userID string) (*UserWithRoles, error) {
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	user, err := s.userRepo.FindByID(ctx, parsedID)
+	if err != nil {
+		return nil, fmt.Errorf("find user: %w", err)
+	}
+
+	return s.resolveUserWithRoles(ctx, user)
+}
+
+// resolveUserWithRoles fetches roles for a user and splits them into system roles
+// and module roles maps.
+func (s *adminServiceImpl) resolveUserWithRoles(ctx context.Context, user *domain.User) (*UserWithRoles, error) {
+	roles, err := s.roleRepo.GetUserRoles(ctx, user.ID)
+	if err != nil {
+		roles = []*domain.Role{}
+	}
+
+	systemRoles := make([]string, 0)
+	moduleRoles := make(map[string][]string)
+
+	for _, r := range roles {
+		if r.Module == nil {
+			systemRoles = append(systemRoles, r.Name)
+		} else {
+			mod := *r.Module
+			moduleRoles[mod] = append(moduleRoles[mod], r.Name)
+		}
+	}
+
+	return &UserWithRoles{
+		User:        user,
+		SystemRoles: systemRoles,
+		ModuleRoles: moduleRoles,
+	}, nil
+}
+
+// EnableUser sets a user's status back to Active.
+func (s *adminServiceImpl) EnableUser(ctx context.Context, userID, actorID string) error {
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	var actorPtr *uuid.UUID
+	if actorID != "" {
+		if parsed, parseErr := uuid.Parse(actorID); parseErr == nil {
+			actorPtr = &parsed
+		}
+	}
+
+	active := domain.UserStatusActive
+
+	if _, err := s.userRepo.Update(ctx, parsedID, domain.UpdateUserInput{
+		Status: &active,
+	}); err != nil {
+		return fmt.Errorf("enable user: %w", err)
+	}
+
+	meta := map[string]interface{}{}
+	if user, fetchErr := s.userRepo.FindByID(ctx, parsedID); fetchErr == nil {
+		meta["target_email"] = user.Email
+	}
+
+	s.writeAuditEvent(ctx, domain.AuditEvent{
+		EventType:    domain.EventUserEnabled,
+		ActorID:      actorPtr,
+		TargetUserID: &parsedID,
+		Metadata:     meta,
+	})
+
+	return nil
+}
+
+// ReplaceUserRoles atomically replaces all roles for a user with the given sets.
+func (s *adminServiceImpl) ReplaceUserRoles(ctx context.Context, userID string, systemRoles []string, moduleRoles map[string][]string, actorID string) (*UserWithRoles, error) {
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	user, err := s.userRepo.FindByID(ctx, parsedID)
+	if err != nil {
+		return nil, fmt.Errorf("find user: %w", err)
+	}
+
+	// Collect all role names requested.
+	allRoleNames := make([]string, 0, len(systemRoles))
+	allRoleNames = append(allRoleNames, systemRoles...)
+	for _, names := range moduleRoles {
+		allRoleNames = append(allRoleNames, names...)
+	}
+
+	// Resolve role names to IDs.
+	roleIDs := make([]uuid.UUID, 0, len(allRoleNames))
+	for _, name := range allRoleNames {
+		role, findErr := s.roleRepo.FindByName(ctx, name)
+		if findErr != nil {
+			return nil, fmt.Errorf("role %q not found: %w", name, findErr)
+		}
+		roleIDs = append(roleIDs, role.ID)
+	}
+
+	// Delegate atomic replacement to the repository.
+	if replaceErr := s.roleRepo.ReplaceUserRoles(ctx, parsedID, roleIDs); replaceErr != nil {
+		return nil, fmt.Errorf("replace user roles: %w", replaceErr)
+	}
+
+	var actorPtr *uuid.UUID
+	if actorID != "" {
+		if parsed, parseErr := uuid.Parse(actorID); parseErr == nil {
+			actorPtr = &parsed
+		}
+	}
+
+	s.writeAuditEvent(ctx, domain.AuditEvent{
+		EventType:    domain.EventRoleAssigned,
+		ActorID:      actorPtr,
+		TargetUserID: &parsedID,
+		Metadata: map[string]interface{}{
+			"system_roles": systemRoles,
+			"module_roles": moduleRoles,
+		},
+	})
+
+	return s.resolveUserWithRoles(ctx, user)
 }
 
 func (s *adminServiceImpl) enqueueEmail(task EmailTask) {

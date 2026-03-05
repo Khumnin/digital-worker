@@ -45,6 +45,12 @@ logs/
 # ── Claude AI worktrees (local only, never commit) ────────────────────────────
 .claude/worktrees/
 
+# ── Brand / CI Toolkit assets (binary, reference only) ───────────────────────
+guide/CI Toolkit/
+guide/Logo Tigersoft 5/
+# Keep the text reference:
+!guide/BRANDING.md
+
 # ── Misc ──────────────────────────────────────────────────────────────────────
 *.tmp
 test.tmp

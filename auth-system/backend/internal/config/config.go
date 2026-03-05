@@ -78,6 +78,7 @@ type EmailConfig struct {
 	ResendAPIKey          string
 	From                  string
 	FromName              string
+	AppURL                string // Base URL of the frontend app (used to build links in emails)
 	WorkerConcurrency     int
 	ChannelBufferSize     int
 	MaxRetries            int
@@ -165,7 +166,8 @@ func Load() (*Config, error) {
 		Email: EmailConfig{
 			ResendAPIKey:          os.Getenv("RESEND_API_KEY"),
 			From:                  mustGetEnv("EMAIL_FROM"),
-			FromName:              getEnvDefault("EMAIL_FROM_NAME", "Auth System"),
+			FromName:              getEnvDefault("EMAIL_FROM_NAME", "TigerSoft"),
+			AppURL:                getEnvDefault("APP_URL", ""),
 			WorkerConcurrency:     mustGetEnvInt("EMAIL_WORKER_CONCURRENCY", 4),
 			ChannelBufferSize:     mustGetEnvInt("EMAIL_CHANNEL_BUFFER_SIZE", 100),
 			MaxRetries:            mustGetEnvInt("EMAIL_MAX_RETRIES", 3),

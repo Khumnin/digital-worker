@@ -134,13 +134,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    if (state.accessToken && state.tenantSlug) {
+    if (state.accessToken) {
       try {
-        await authApi.logout(state.accessToken, state.tenantSlug);
+        await authApi.logout(state.accessToken);
       } catch {}
     }
     clearState();
-  }, [state.accessToken, state.tenantSlug, clearState]);
+  }, [state.accessToken, clearState]);
 
   const getToken = useCallback(async (): Promise<string | null> => {
     if (!state.accessToken) return null;

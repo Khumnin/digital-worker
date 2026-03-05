@@ -59,32 +59,32 @@ func (r *PostgresAuditRepo) List(ctx context.Context, filter domain.AuditFilter)
 
 	err = pgdb.WithTenantSchema(ctx, r.pool, schema, func(conn *pgx.Conn) error {
 		args := []interface{}{}
-		conds := []string{"archived = false"}
+		conds := []string{"a.archived = false"}
 
 		if filter.EventType != nil && *filter.EventType != "" {
 			args = append(args, *filter.EventType)
-			conds = append(conds, fmt.Sprintf("event_type = $%d", len(args)))
+			conds = append(conds, fmt.Sprintf("a.event_type = $%d", len(args)))
 		}
 		if filter.ActorID != nil {
 			args = append(args, *filter.ActorID)
-			conds = append(conds, fmt.Sprintf("actor_id = $%d", len(args)))
+			conds = append(conds, fmt.Sprintf("a.actor_id = $%d", len(args)))
 		}
 		if filter.TargetUserID != nil {
 			args = append(args, *filter.TargetUserID)
-			conds = append(conds, fmt.Sprintf("target_user_id = $%d", len(args)))
+			conds = append(conds, fmt.Sprintf("a.target_user_id = $%d", len(args)))
 		}
 		if filter.From != nil {
 			args = append(args, *filter.From)
-			conds = append(conds, fmt.Sprintf("occurred_at >= $%d", len(args)))
+			conds = append(conds, fmt.Sprintf("a.occurred_at >= $%d", len(args)))
 		}
 		if filter.To != nil {
 			args = append(args, *filter.To)
-			conds = append(conds, fmt.Sprintf("occurred_at <= $%d", len(args)))
+			conds = append(conds, fmt.Sprintf("a.occurred_at <= $%d", len(args)))
 		}
 
 		where := "WHERE " + strings.Join(conds, " AND ")
 
-		countSQL := fmt.Sprintf("SELECT COUNT(*) FROM audit_log %s", where)
+		countSQL := fmt.Sprintf("SELECT COUNT(*) FROM audit_log a %s", where)
 		if countErr := conn.QueryRow(ctx, countSQL, args...).Scan(&total); countErr != nil {
 			return fmt.Errorf("count audit log: %w", countErr)
 		}
@@ -96,11 +96,15 @@ func (r *PostgresAuditRepo) List(ctx context.Context, filter domain.AuditFilter)
 
 		args = append(args, limit, filter.Offset)
 		dataSQL := fmt.Sprintf(`
-			SELECT id, event_type, actor_id, actor_ip, actor_ua,
-			       target_user_id, metadata, occurred_at, archived
-			FROM audit_log
+			SELECT a.id, a.event_type, a.actor_id, a.actor_ip, a.actor_ua,
+			       a.target_user_id, a.metadata, a.occurred_at, a.archived,
+			       actor_u.email AS actor_email,
+			       target_u.email AS target_email
+			FROM audit_log a
+			LEFT JOIN users actor_u  ON actor_u.id  = a.actor_id AND actor_u.deleted_at IS NULL
+			LEFT JOIN users target_u ON target_u.id = a.target_user_id AND target_u.deleted_at IS NULL
 			%s
-			ORDER BY occurred_at DESC
+			ORDER BY a.occurred_at DESC
 			LIMIT $%d OFFSET $%d
 		`, where, len(args)-1, len(args))
 
@@ -116,6 +120,7 @@ func (r *PostgresAuditRepo) List(ctx context.Context, filter domain.AuditFilter)
 			scanErr := rows.Scan(
 				&e.ID, &e.EventType, &e.ActorID, &e.ActorIP, &e.ActorUA,
 				&e.TargetUserID, &metadataJSON, &e.OccurredAt, &e.Archived,
+				&e.ActorEmail, &e.TargetEmail,
 			)
 			if scanErr != nil {
 				return fmt.Errorf("scan audit event: %w", scanErr)

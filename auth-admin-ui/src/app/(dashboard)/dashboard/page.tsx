@@ -15,17 +15,17 @@ const EMPTY_STATS: DashboardStats = {
 };
 
 export default function DashboardPage() {
-  const { getToken, tenantId, isSuperAdmin } = useAuth();
+  const { getToken, isSuperAdmin } = useAuth();
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
 
   useEffect(() => {
     async function load() {
       const token = await getToken();
-      if (!token || !tenantId) return;
+      if (!token) return;
       try {
         const [tenants, users] = await Promise.allSettled([
           isSuperAdmin ? tenantApi.list(token) : Promise.resolve(null),
-          userApi.list(token, tenantId, { page_size: 1 }),
+          userApi.list(token, { page_size: 1 }),
         ]);
 
         const tenantData =
@@ -45,7 +45,7 @@ export default function DashboardPage() {
       } catch {}
     }
     load();
-  }, [getToken, tenantId, isSuperAdmin]);
+  }, [getToken, isSuperAdmin]);
 
   const statCards = [
     ...(isSuperAdmin
@@ -115,7 +115,7 @@ export default function DashboardPage() {
                 <a
                   key={action.label}
                   href={action.href}
-                  className="flex items-center justify-center px-4 py-3 rounded-[10px] bg-[#f0f0f0] text-sm font-medium text-semi-black hover:bg-[#e8e8e8] transition-colors text-center"
+                  className="flex items-center justify-center px-4 py-3 rounded-[10px] bg-[#f0f0f0] dark:bg-[#2A2A35] text-sm font-medium text-semi-black hover:bg-[#e8e8e8] dark:hover:bg-[#333344] transition-colors text-center"
                 >
                   {action.label}
                 </a>

@@ -27,7 +27,7 @@ spec:
       # Run migrations as an init container before the API starts
       initContainers:
         - name: migrate
-          image: REGISTRY_PLACEHOLDER/tigersoft-auth:latest
+          image: 855407392262.dkr.ecr.ap-southeast-7.amazonaws.com/tigersoft-auth:audit-log-fix
           imagePullPolicy: Always
           command: ["/migrate", "-scope=global", "-direction=up", "-seed-platform=true"]
           envFrom:
@@ -37,7 +37,7 @@ spec:
                 name: auth-api-secrets
       containers:
         - name: auth-api
-          image: REGISTRY_PLACEHOLDER/tigersoft-auth:latest
+          image: 855407392262.dkr.ecr.ap-southeast-7.amazonaws.com/tigersoft-auth:audit-log-fix
           imagePullPolicy: Always
           ports:
             - name: http

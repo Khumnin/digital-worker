@@ -39,8 +39,7 @@ export interface Tenant {
   name: string;
   slug: string;
   status: "active" | "suspended" | "pending";
-  schema_name: string;
-  config: TenantConfig;
+  enabled_modules: string[];
   created_at: string;
   updated_at: string;
 }
@@ -55,18 +54,18 @@ export interface TenantConfig {
 export interface CreateTenantRequest {
   name: string;
   slug: string;
+  admin_email: string;
   config?: TenantConfig;
 }
 
 export interface User {
   id: string;
   email: string;
-  first_name: string;
-  last_name: string;
+  display_name: string;
   status: "active" | "inactive" | "pending";
-  email_verified_at?: string;
-  mfa_enabled: boolean;
-  roles: Role[];
+  system_roles: string[];
+  module_roles: Record<string, string[]>;
+  tenant_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -75,31 +74,43 @@ export interface Role {
   id: string;
   name: string;
   description: string;
+  module: string | null;
   is_system: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 export interface CreateRoleRequest {
   name: string;
   description: string;
+  module?: string;
+}
+
+export interface UpdateUserRolesRequest {
+  system_roles: string[];
+  module_roles: Record<string, string[]>;
 }
 
 export interface InviteUserRequest {
   email: string;
-  first_name: string;
-  last_name: string;
-  role_ids: string[];
+  display_name: string;
+  initial_role?: string;
+}
+
+export interface InviteAdminRequest {
+  email: string;
+  display_name: string;
 }
 
 export interface AuditLog {
   id: string;
   action: string;
-  actor_id?: string;
+  actor_id: string;
   actor_email?: string;
-  target_id?: string;
-  target_type?: string;
-  metadata?: Record<string, unknown>;
-  ip_address?: string;
+  ip_address: string;
+  target_id: string | null;
+  target_email?: string;
+  metadata: Record<string, unknown>;
   created_at: string;
 }
 
@@ -108,6 +119,7 @@ export interface PaginatedResponse<T> {
   total: number;
   page: number;
   page_size: number;
+  total_pages: number;
 }
 
 export interface DashboardStats {
@@ -116,6 +128,25 @@ export interface DashboardStats {
   total_users: number;
   active_users: number;
   recent_logins_24h: number;
+}
+
+export interface TenantSettings {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  enabled_modules: string[];
+  mfa_required: boolean;
+  session_duration_hours: number;
+  allowed_domains: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenantSettingsUpdate {
+  mfa_required?: boolean;
+  session_duration_hours?: number;
+  allowed_domains?: string[];
 }
 
 // ── JWT helpers ──────────────────────────────────────────────────────────────
@@ -151,8 +182,14 @@ async function apiFetch<T>(path: string, opts: FetchOptions = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  if (tenantId) headers["X-Tenant-ID"] = tenantId;
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    // Do NOT send X-Tenant-ID for authenticated requests — the middleware
+    // extracts the tenant from the JWT itself. Sending it causes TENANT_MISMATCH.
+  } else if (tenantId) {
+    // Only send X-Tenant-ID for unauthenticated requests (e.g. login).
+    headers["X-Tenant-ID"] = tenantId;
+  }
 
   const res = await fetch(`${API_BASE}${path}`, {
     method,
@@ -166,8 +203,9 @@ async function apiFetch<T>(path: string, opts: FetchOptions = {}): Promise<T> {
     let code: string | undefined;
     try {
       const err = await res.json();
-      message = err.message || err.error || message;
-      code = err.code;
+      // Backend returns {"error": {"code": "...", "message": "..."}}
+      message = err.error?.message || err.message || err.error || message;
+      code = err.error?.code || err.code;
     } catch {}
     throw new ApiError(res.status, message, code);
   }
@@ -186,26 +224,50 @@ export const authApi = {
       tenantId: tenantSlug,
     }),
 
-  refresh: (refreshToken: string, tenantId: string) =>
-    apiFetch<LoginResponse>("/api/v1/auth/refresh", {
+  acceptInvite: (token: string, password: string, tenantSlug: string) =>
+    apiFetch<{ message: string }>("/api/v1/auth/accept-invite", {
       method: "POST",
-      body: { refresh_token: refreshToken },
-      tenantId,
+      body: { token, password },
+      tenantId: tenantSlug,
     }),
 
-  logout: (token: string, tenantId: string) =>
+  refresh: (refreshToken: string, tenantSlug: string) =>
+    apiFetch<LoginResponse>("/api/v1/auth/token/refresh", {
+      method: "POST",
+      body: { refresh_token: refreshToken },
+      tenantId: tenantSlug,
+    }),
+
+  logout: (token: string) =>
     apiFetch<void>("/api/v1/auth/logout", {
       method: "POST",
       token,
-      tenantId,
+    }),
+
+  forgotPassword: (email: string, tenantSlug: string) =>
+    apiFetch<{ message: string }>("/api/v1/auth/forgot-password", {
+      method: "POST",
+      body: { email },
+      tenantId: tenantSlug,
+    }),
+
+  resetPassword: (token: string, password: string, tenantSlug: string) =>
+    apiFetch<{ message: string }>("/api/v1/auth/reset-password", {
+      method: "POST",
+      body: { token, password },
+      tenantId: tenantSlug,
     }),
 };
 
 // ── Tenant admin endpoints ────────────────────────────────────────────────────
 
 export const tenantApi = {
-  list: (token: string) =>
-    apiFetch<PaginatedResponse<Tenant>>("/api/v1/admin/tenants", { token }),
+  list: (token: string, params?: { page?: number; page_size?: number }) => {
+    const qs = params
+      ? "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString()
+      : "";
+    return apiFetch<PaginatedResponse<Tenant>>(`/api/v1/admin/tenants${qs}`, { token });
+  },
 
   get: (id: string, token: string) =>
     apiFetch<Tenant>(`/api/v1/admin/tenants/${id}`, { token }),
@@ -235,74 +297,157 @@ export const tenantApi = {
       method: "POST",
       token,
     }),
+
+  listUsers: (id: string, token: string) =>
+    apiFetch<PaginatedResponse<User>>(`/api/v1/admin/tenants/${id}/users`, { token }),
+
+  inviteAdmin: (id: string, data: InviteAdminRequest, token: string) =>
+    apiFetch<User>(`/api/v1/admin/tenants/${id}/invite-admin`, {
+      method: "POST",
+      body: data,
+      token,
+    }),
+
+  resendAdminInvite: (tenantId: string, userId: string, token: string) =>
+    apiFetch<{ message: string }>(
+      `/api/v1/admin/tenants/${tenantId}/users/${userId}/resend-invite`,
+      { method: "POST", token }
+    ),
 };
 
 // ── User admin endpoints ──────────────────────────────────────────────────────
 
 export const userApi = {
-  list: (token: string, tenantId: string, params?: { page?: number; page_size?: number; role?: string }) => {
+  list: (token: string, params?: { page?: number; page_size?: number; role?: string; status?: string; module?: string }) => {
     const qs = params
-      ? "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString()
+      ? "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)])).toString()
       : "";
-    return apiFetch<PaginatedResponse<User>>(`/api/v1/admin/users${qs}`, { token, tenantId });
+    return apiFetch<PaginatedResponse<User>>(`/api/v1/admin/users${qs}`, { token });
   },
 
-  get: (id: string, token: string, tenantId: string) =>
-    apiFetch<User>(`/api/v1/admin/users/${id}`, { token, tenantId }),
+  get: (id: string, token: string) =>
+    apiFetch<User>(`/api/v1/admin/users/${id}`, { token }),
 
-  invite: (data: InviteUserRequest, token: string, tenantId: string) =>
+  invite: (data: InviteUserRequest, token: string) =>
     apiFetch<User>("/api/v1/admin/users/invite", {
       method: "POST",
       body: data,
       token,
-      tenantId,
     }),
 
-  updateRoles: (userId: string, roleIds: string[], token: string, tenantId: string) =>
+  updateRoles: (userId: string, data: UpdateUserRolesRequest, token: string) =>
     apiFetch<void>(`/api/v1/admin/users/${userId}/roles`, {
       method: "PUT",
-      body: { role_ids: roleIds },
+      body: data,
       token,
-      tenantId,
     }),
 
-  suspend: (id: string, token: string, tenantId: string) =>
-    apiFetch<void>(`/api/v1/admin/users/${id}/suspend`, {
+  suspend: (id: string, token: string) =>
+    apiFetch<void>(`/api/v1/admin/users/${id}/disable`, {
       method: "POST",
       token,
-      tenantId,
+    }),
+
+  resendInvite: (id: string, token: string) =>
+    apiFetch<{ message: string }>(`/api/v1/admin/users/${id}/resend-invite`, {
+      method: "POST",
+      token,
     }),
 };
 
 // ── Role admin endpoints ──────────────────────────────────────────────────────
 
 export const roleApi = {
-  list: (token: string, tenantId: string) =>
-    apiFetch<Role[]>("/api/v1/admin/roles", { token, tenantId }),
+  list: (token: string, params?: { module?: string }) => {
+    const qs = params?.module
+      ? "?" + new URLSearchParams({ module: params.module }).toString()
+      : "";
+    return apiFetch<Role[]>(`/api/v1/admin/roles${qs}`, { token });
+  },
 
-  create: (data: CreateRoleRequest, token: string, tenantId: string) =>
+  create: (data: CreateRoleRequest, token: string) =>
     apiFetch<Role>("/api/v1/admin/roles", {
       method: "POST",
       body: data,
       token,
-      tenantId,
     }),
 
-  delete: (id: string, token: string, tenantId: string) =>
+  delete: (id: string, token: string) =>
     apiFetch<void>(`/api/v1/admin/roles/${id}`, {
       method: "DELETE",
       token,
-      tenantId,
     }),
 };
 
 // ── Audit log endpoints ───────────────────────────────────────────────────────
 
+// Converts a plain date string ("YYYY-MM-DD") to an ISO 8601 timestamp with
+// the Asia/Bangkok offset (+07:00). Pass `endOfDay: true` to get 23:59:59
+// instead of 00:00:00, so the `to` filter is inclusive of the full day.
+function toLocalIso(dateStr: string, endOfDay: boolean): string {
+  const time = endOfDay ? "23:59:59" : "00:00:00";
+  return `${dateStr}T${time}+07:00`;
+}
+
 export const auditApi = {
-  list: (token: string, tenantId: string, params?: { page?: number; page_size?: number; action?: string; actor_id?: string }) => {
-    const qs = params
-      ? "?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString()
+  list: (token: string, params?: { page?: number; page_size?: number; action?: string; actor_id?: string; from?: string; to?: string }) => {
+    const { from, to, ...rest } = params ?? {};
+    const resolved: Record<string, string> = Object.fromEntries(
+      Object.entries(rest)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, String(v)])
+    );
+    if (from) resolved["from"] = toLocalIso(from, false);
+    if (to)   resolved["to"]   = toLocalIso(to,   true);
+    const qs = Object.keys(resolved).length > 0
+      ? "?" + new URLSearchParams(resolved).toString()
       : "";
-    return apiFetch<PaginatedResponse<AuditLog>>(`/api/v1/admin/audit-log${qs}`, { token, tenantId });
+    return apiFetch<PaginatedResponse<AuditLog>>(`/api/v1/admin/audit-log${qs}`, { token });
   },
+};
+
+// ── User self-service (me) endpoints ─────────────────────────────────────────
+
+export interface MeProfile {
+  user_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  mfa_enabled: boolean;
+  created_at: string;
+  tenant_id: string;
+  roles: string[];
+}
+
+export const meApi = {
+  get: (token: string) =>
+    apiFetch<MeProfile>("/api/v1/users/me", { token }),
+
+  updateProfile: (token: string, firstName: string, lastName: string) =>
+    apiFetch<MeProfile>("/api/v1/users/me", {
+      method: "PUT",
+      token,
+      body: { first_name: firstName, last_name: lastName },
+    }),
+
+  changePassword: (token: string, currentPassword: string, newPassword: string) =>
+    apiFetch<{ message: string }>("/api/v1/users/me", {
+      method: "PUT",
+      token,
+      body: { current_password: currentPassword, new_password: newPassword },
+    }),
+};
+
+// ── Settings endpoints ────────────────────────────────────────────────────────
+
+export const settingsApi = {
+  get: (token: string) =>
+    apiFetch<TenantSettings>("/api/v1/admin/tenant", { token }),
+
+  update: (token: string, data: Partial<TenantSettingsUpdate>) =>
+    apiFetch<TenantSettings>("/api/v1/admin/tenant", {
+      method: "PUT",
+      token,
+      body: data,
+    }),
 };

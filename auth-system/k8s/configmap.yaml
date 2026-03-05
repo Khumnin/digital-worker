@@ -11,9 +11,9 @@ data:
   ENV: "production"
   JWT_KEY_ID: "key-prod-1"
   # Update these to match your actual domain after DNS is configured
-  JWT_ISSUER: "https://auth.yourdomain.com"
+  JWT_ISSUER: "https://auth.tgstack.dev"
   JWT_AUDIENCE: "tigersoft-auth"
-  AUTH_SERVICE_BASE_URL: "https://auth.yourdomain.com"
-  EMAIL_FROM: "auth@yourdomain.com"
-  # Internal cluster service addresses
+  AUTH_SERVICE_BASE_URL: "https://auth.tgstack.dev"
+  EMAIL_FROM: "noreply@tigersoft.co.th"
+  CORS_ALLOWED_ORIGINS: "https://auth-admin.tgstack.dev,https://auth.tgstack.dev,http://localhost:3000"
   # DATABASE_URL and REDIS_URL are in the Secret

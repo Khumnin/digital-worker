@@ -2,29 +2,32 @@
 package email
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"net/smtp"
 
-	"github.com/resendlabs/resend-go/v2"
 	"tigersoft/auth-system/internal/config"
 )
 
 // Client sends emails via Resend API (production) or SMTP/Mailhog (local dev).
 type Client struct {
-	resendClient *resend.Client
-	cfg          config.EmailConfig
-	useResend    bool
+	httpClient *http.Client
+	cfg        config.EmailConfig
+	useResend  bool
 }
 
 // NewClient creates an email client. Uses Resend if API key is set, SMTP otherwise.
 func NewClient(cfg config.EmailConfig) *Client {
 	if cfg.ResendAPIKey != "" {
 		return &Client{
-			resendClient: resend.NewClient(cfg.ResendAPIKey),
-			cfg:          cfg,
-			useResend:    true,
+			httpClient: &http.Client{},
+			cfg:        cfg,
+			useResend:  true,
 		}
 	}
 	slog.Info("RESEND_API_KEY not set — using SMTP/Mailhog for email delivery")
@@ -39,20 +42,49 @@ func (c *Client) Send(ctx context.Context, msg Message) error {
 	return c.sendViaSMTP(msg)
 }
 
+// resendRequest mirrors the Resend v1 API body with tracking disabled.
+type resendRequest struct {
+	From        string `json:"from"`
+	To          []string `json:"to"`
+	Subject     string `json:"subject"`
+	Html        string `json:"html,omitempty"`
+	Text        string `json:"text,omitempty"`
+	TrackClicks bool   `json:"track_clicks"`
+	TrackOpens  bool   `json:"track_opens"`
+}
+
 func (c *Client) sendViaResend(ctx context.Context, msg Message) error {
-	params := &resend.SendEmailRequest{
-		From:    fmt.Sprintf("%s <%s>", c.cfg.FromName, c.cfg.From),
-		To:      []string{msg.To},
-		Subject: msg.Subject,
-		Html:    msg.HTMLBody,
-	}
-	if msg.TextBody != "" {
-		params.Text = msg.TextBody
+	payload := resendRequest{
+		From:        fmt.Sprintf("%s <%s>", c.cfg.FromName, c.cfg.From),
+		To:          []string{msg.To},
+		Subject:     msg.Subject,
+		Html:        msg.HTMLBody,
+		Text:        msg.TextBody,
+		TrackClicks: false,
+		TrackOpens:  false,
 	}
 
-	_, err := c.resendClient.Emails.SendWithContext(ctx, params)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal resend request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create resend request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.cfg.ResendAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("resend send email: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("resend API error %d: %s", resp.StatusCode, string(respBody))
 	}
 	return nil
 }

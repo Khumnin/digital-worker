@@ -138,10 +138,21 @@ func (s *profileServiceImpl) UpdateProfile(ctx context.Context, input UpdateProf
 		return nil, fmt.Errorf("update profile: %w", err)
 	}
 
+	changedFields := []string{}
+	if input.FirstName != nil {
+		changedFields = append(changedFields, "first_name")
+	}
+	if input.LastName != nil {
+		changedFields = append(changedFields, "last_name")
+	}
+
 	s.writeAudit(ctx, domain.AuditEvent{
 		EventType:    domain.EventProfileUpdated,
 		ActorID:      &input.UserID,
 		TargetUserID: &input.UserID,
+		Metadata: map[string]interface{}{
+			"changed_fields": changedFields,
+		},
 	})
 
 	return userToProfile(user), nil
@@ -199,6 +210,9 @@ func (s *profileServiceImpl) ChangePassword(ctx context.Context, input ChangePas
 		ActorID:      &input.UserID,
 		ActorIP:      input.IPAddress,
 		TargetUserID: &input.UserID,
+		Metadata: map[string]interface{}{
+			"method": "self",
+		},
 	})
 
 	return nil

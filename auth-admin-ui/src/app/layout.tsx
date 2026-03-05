@@ -1,41 +1,50 @@
 import type { Metadata } from "next";
-import { Poppins, Noto_Sans_Thai } from "next/font/google";
-import { Toaster } from "@/components/ui/sonner";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/auth";
+import { ThemeProvider } from "@/contexts/theme";
+import { ThemedToaster } from "@/components/ui/themed-toaster";
 import "./globals.css";
 
-const poppins = Poppins({
-  variable: "--font-poppins",
+const plusJakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta-sans",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const notoSansThai = Noto_Sans_Thai({
-  variable: "--font-noto-sans-thai",
-  subsets: ["thai"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["300", "500", "600"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "TGX Auth Console",
   description: "Tigersoft Authentication Platform — Tenant & User Management",
+  icons: {
+    icon: "/logo-mark.svg",
+    shortcut: "/logo-mark.svg",
+    apple: "/logo-mark.svg",
+  },
 };
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="th">
-      <body
-        className={`${poppins.variable} ${notoSansThai.variable} antialiased`}
-      >
-        <AuthProvider>
-          <TooltipProvider>
-            {children}
-            <Toaster richColors position="top-right" />
-          </TooltipProvider>
-        </AuthProvider>
+    <html lang="th" className={plusJakartaSans.variable} suppressHydrationWarning>
+      <head>
+        {/* FOIT prevention: apply dark class before first paint */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('tgx-theme');if(t==='dark'||(t===null&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}`,
+          }}
+        />
+      </head>
+      <body className="antialiased">
+        <ThemeProvider>
+          <AuthProvider>
+            <TooltipProvider>
+              {children}
+              <ThemedToaster />
+            </TooltipProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

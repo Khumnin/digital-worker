@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { useAuth } from "@/contexts/auth";
@@ -14,8 +14,9 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, accessToken } = useAuth();
+  const { isAuthenticated, isAdmin, accessToken, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [lang, setLang] = useState<"th" | "en">("th");
   const [ready, setReady] = useState(false);
 
@@ -51,6 +52,16 @@ export default function DashboardLayout({
   }
 
   if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-page-bg flex items-center justify-center">
+        <Loader2 className="text-tiger-red animate-spin" size={28} />
+      </div>
+    );
+  }
+
+  // Non-admin users can only access /me; redirect all other routes
+  if (isAuthenticated && !isAdmin && pathname !== "/me") {
+    router.replace("/me");
     return (
       <div className="min-h-screen bg-page-bg flex items-center justify-center">
         <Loader2 className="text-tiger-red animate-spin" size={28} />

@@ -139,7 +139,7 @@ func run() error {
 		userRepo, sessionRepo, tokenRepo, auditRepo, emailChannel, cfg.Email.PasswordResetTokenTTL,
 	)
 	sessionSvc := service.NewSessionService(
-		userRepo, sessionRepo, auditRepo, keyStore, cfg.JWT.AccessTokenTTL,
+		userRepo, sessionRepo, auditRepo, roleRepo, keyStore, cfg.JWT.AccessTokenTTL,
 	)
 	tenantSvc := service.NewTenantService(
 		tenantRepo, credRepo, pool, cfg.Database.URL,
@@ -180,7 +180,7 @@ func run() error {
 		UserHandler:      handler.NewUserHandler(profileSvc, mfaSvc),
 		MFAHandler:       handler.NewMFAHandler(mfaSvc),
 		AdminHandler:     handler.NewAdminHandler(adminSvc),
-		TenantHandler:    handler.NewTenantHandler(tenantSvc),
+		TenantHandler:    handler.NewTenantHandler(tenantSvc, adminSvc),
 		RoleHandler:      handler.NewRoleHandler(rbacSvc),
 		AuditHandler:     handler.NewAuditHandler(auditSvc),
 		WellKnownHandler: handler.NewWellKnownHandler(jwtSvc),

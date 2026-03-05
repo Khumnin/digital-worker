@@ -13,10 +13,14 @@ import (
 
 // RBACService manages roles and their assignment to users within a tenant.
 type RBACService interface {
-	CreateRole(ctx context.Context, name, description string) (*domain.Role, error)
+	CreateRole(ctx context.Context, name, description string, module *string) (*domain.Role, error)
 	ListRoles(ctx context.Context) ([]*domain.Role, error)
+	// DeleteRole removes a non-system role that is not currently assigned to any user.
+	// Returns domain.ErrSystemRole if the role is a system role, or
+	// domain.ErrRoleInUse if any user currently holds the role.
+	DeleteRole(ctx context.Context, roleID string) error
 	AssignRole(ctx context.Context, userID, roleID, assignedBy string) error
-	UnassignRole(ctx context.Context, userID, roleID string) error
+	UnassignRole(ctx context.Context, userID, roleID, assignedBy string) error
 	GetUserRoles(ctx context.Context, userID string) ([]*domain.Role, error)
 }
 
@@ -40,8 +44,8 @@ func NewRBACService(
 }
 
 // CreateRole persists a new role in the tenant schema.
-func (s *rbacServiceImpl) CreateRole(ctx context.Context, name, description string) (*domain.Role, error) {
-	role, err := s.roleRepo.Create(ctx, name, description)
+func (s *rbacServiceImpl) CreateRole(ctx context.Context, name, description string, module *string) (*domain.Role, error) {
+	role, err := s.roleRepo.Create(ctx, name, description, module)
 	if err != nil {
 		return nil, fmt.Errorf("create role: %w", err)
 	}
@@ -57,6 +61,38 @@ func (s *rbacServiceImpl) ListRoles(ctx context.Context) ([]*domain.Role, error)
 	}
 
 	return roles, nil
+}
+
+// DeleteRole validates that the role exists, is not a system role, and is not
+// currently assigned to any user — then deletes it.
+func (s *rbacServiceImpl) DeleteRole(ctx context.Context, roleID string) error {
+	parsedID, err := uuid.Parse(roleID)
+	if err != nil {
+		return fmt.Errorf("invalid role ID: %w", err)
+	}
+
+	role, err := s.roleRepo.FindByID(ctx, parsedID)
+	if err != nil {
+		return fmt.Errorf("find role: %w", err)
+	}
+
+	if role.IsSystem {
+		return domain.ErrSystemRole
+	}
+
+	inUse, err := s.roleRepo.IsAssignedToAnyUser(ctx, parsedID)
+	if err != nil {
+		return fmt.Errorf("check role assignment: %w", err)
+	}
+	if inUse {
+		return domain.ErrRoleInUse
+	}
+
+	if err := s.roleRepo.Delete(ctx, parsedID); err != nil {
+		return fmt.Errorf("delete role: %w", err)
+	}
+
+	return nil
 }
 
 // AssignRole links a role to a user and writes an audit record.
@@ -80,20 +116,25 @@ func (s *rbacServiceImpl) AssignRole(ctx context.Context, userID, roleID, assign
 		return fmt.Errorf("assign role to user: %w", err)
 	}
 
+	roleMeta := map[string]interface{}{"role_id": parsedRoleID.String()}
+	if role, lookupErr := s.roleRepo.FindByID(ctx, parsedRoleID); lookupErr == nil {
+		roleMeta["role_name"] = role.Name
+	} else {
+		slog.Warn("assign role: could not look up role name for audit", "role_id", parsedRoleID, "error", lookupErr)
+	}
+
 	s.writeAuditEvent(ctx, domain.AuditEvent{
 		EventType:    domain.EventRoleAssigned,
 		ActorID:      &parsedAssignedBy,
 		TargetUserID: &parsedUserID,
-		Metadata: map[string]interface{}{
-			"role_id": parsedRoleID.String(),
-		},
+		Metadata:     roleMeta,
 	})
 
 	return nil
 }
 
 // UnassignRole removes a role from a user and writes an audit record.
-func (s *rbacServiceImpl) UnassignRole(ctx context.Context, userID, roleID string) error {
+func (s *rbacServiceImpl) UnassignRole(ctx context.Context, userID, roleID, assignedBy string) error {
 	parsedUserID, err := uuid.Parse(userID)
 	if err != nil {
 		return fmt.Errorf("invalid user ID: %w", err)
@@ -104,17 +145,27 @@ func (s *rbacServiceImpl) UnassignRole(ctx context.Context, userID, roleID strin
 		return fmt.Errorf("invalid role ID: %w", err)
 	}
 
+	parsedAssignedBy, err := uuid.Parse(assignedBy)
+	if err != nil {
+		return fmt.Errorf("invalid assignedBy ID: %w", err)
+	}
+
 	if err := s.roleRepo.UnassignFromUser(ctx, parsedUserID, parsedRoleID); err != nil {
 		return fmt.Errorf("unassign role from user: %w", err)
 	}
 
+	roleMeta := map[string]interface{}{"role_id": parsedRoleID.String()}
+	if role, lookupErr := s.roleRepo.FindByID(ctx, parsedRoleID); lookupErr == nil {
+		roleMeta["role_name"] = role.Name
+	} else {
+		slog.Warn("unassign role: could not look up role name for audit", "role_id", parsedRoleID, "error", lookupErr)
+	}
+
 	s.writeAuditEvent(ctx, domain.AuditEvent{
 		EventType:    domain.EventRoleUnassigned,
-		ActorID:      &parsedUserID,
+		ActorID:      &parsedAssignedBy,
 		TargetUserID: &parsedUserID,
-		Metadata: map[string]interface{}{
-			"role_id": parsedRoleID.String(),
-		},
+		Metadata:     roleMeta,
 	})
 
 	return nil

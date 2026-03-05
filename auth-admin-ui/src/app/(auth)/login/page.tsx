@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,31 +48,17 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-page-bg flex items-center justify-center px-4">
       {/* Card */}
-      <div className="w-full max-w-[440px] bg-white rounded-[10px] p-10 shadow-sm">
+      <div className="w-full max-w-[440px] bg-card rounded-[10px] p-10 shadow-sm">
         {/* Logo / Brand */}
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-tiger-red mb-4">
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M12 2L3 7V17L12 22L21 17V7L12 2Z"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M12 2V22M3 7L21 17M21 7L3 17"
-                stroke="white"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
-          </div>
+          <Image
+            src="/logo-mark.svg"
+            alt="TigerSoft"
+            width={56}
+            height={56}
+            className="mx-auto mb-4"
+            priority
+          />
           <h1 className="text-xl font-semibold text-semi-black">
             TGX Auth Console
           </h1>
@@ -94,7 +82,7 @@ export default function LoginPage() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, tenantSlug: e.target.value }))
               }
-              className="bg-[#f0f0f0] border-[#f0f0f0] rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
+              className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
             />
           </div>
 
@@ -113,7 +101,7 @@ export default function LoginPage() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, email: e.target.value }))
               }
-              className="bg-[#f0f0f0] border-[#f0f0f0] rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
+              className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 text-sm focus-visible:ring-tiger-red"
             />
           </div>
 
@@ -133,7 +121,7 @@ export default function LoginPage() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, password: e.target.value }))
                 }
-                className="bg-[#f0f0f0] border-[#f0f0f0] rounded-[10px] h-12 px-4 pr-12 text-sm focus-visible:ring-tiger-red"
+                className="bg-[#f0f0f0] dark:bg-input border-[#f0f0f0] dark:border-input rounded-[10px] h-12 px-4 pr-12 text-sm focus-visible:ring-tiger-red"
               />
               <button
                 type="button"
@@ -148,6 +136,13 @@ export default function LoginPage() {
                 )}
               </button>
             </div>
+          </div>
+
+          {/* Forgot password */}
+          <div className="text-right">
+            <Link href="/forgot-password" className="text-xs text-tiger-red hover:underline">
+              Forgot password?
+            </Link>
           </div>
 
           {/* Submit */}
